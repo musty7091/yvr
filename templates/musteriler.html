@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Müşteriler - YVR Reklam{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center">
+    <div class="col">
+        <h3 class="mb-1">Müşteri Portföyü</h3>
+        <p class="text-muted small">Tüm kayıtlı müşterilerinizin iletişim ve işyeri bilgileri.</p>
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-yvr-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#musteriEkleModal">
+            <i class="bi bi-person-plus me-2"></i>MÜŞTERİ EKLE
+        </button>
+    </div>
+</div>
+
+<div class="card card-custom p-0 overflow-hidden shadow-sm border-0">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead style="background-color: #f8f9fa;">
+                <tr>
+                    <th class="ps-4">Müşteri Adı / İşyeri</th>
+                    <th>İletişim</th>
+                    <th class="text-end pe-4">Aksiyon</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in musteriler %}
+                <tr>
+                    <td class="ps-4">
+                        <div class="fw-medium text-dark">{{ m.ad_soyad }}</div>
+                        {% if m.isyeri_adi %}
+                        <div class="small text-secondary" style="font-size: 0.85rem;">{{ m.isyeri_adi }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="small text-muted"><i class="bi bi-telephone me-2"></i>{{ m.telefon or '-' }}</div>
+                    </td>
+                    <td class="text-end pe-4">
+                        <a href="/musteri/{{ m.id }}" class="btn btn-sm btn-light rounded-pill px-4" style="font-size: 0.8rem; border: 1px solid #eee;">DETAYLAR</a>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not musteriler %}
+                <tr>
+                    <td colspan="3" class="text-center py-5 text-muted small">Kayıtlı müşteri bulunmamaktadır.</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Müşteri Ekle Modal (Güncellendi: İşyeri Bilgileri Eklendi) -->
+<div class="modal fade" id="musteriEkleModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow" style="border-radius: 25px;">
+            <div class="modal-body p-5">
+                <h5 class="fw-bold mb-4">Yeni Müşteri Tanımı</h5>
+                <form action="/musteri_ekle" method="POST">
+                    <div class="mb-3">
+                        <label class="form-label small fw-medium">AD SOYAD</label>
+                        <input type="text" name="ad_soyad" class="form-control border-0 bg-light p-3" style="border-radius: 12px;" placeholder="Örn: Ahmet Yılmaz" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-medium">TELEFON</label>
+                        <input type="text" name="telefon" class="form-control border-0 bg-light p-3" style="border-radius: 12px;" placeholder="05XX XXX XX XX">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-medium text-primary">İŞYERİ ADI</label>
+                        <input type="text" name="isyeri_adi" class="form-control border-0 bg-light p-3" style="border-radius: 12px;" placeholder="Örn: Vizyon Reklam A.Ş.">
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label small fw-medium text-primary">İŞYERİ ADRESİ</label>
+                        <textarea name="isyeri_adresi" class="form-control border-0 bg-light p-3" style="border-radius: 12px;" rows="3" placeholder="Açık adres bilgilerini buraya yazabilirsiniz..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-yvr-primary w-100 py-3 shadow">SİSTEME KAYDET</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

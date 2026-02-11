@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Panel - YVR Reklam{% endblock %}
+
+{% block content %}
+<!-- Üst Özet Kartları -->
+<div class="row g-4 mb-5">
+    <!-- Alacak Bakiyesi ve Sadeleştirilmiş Kurlar -->
+    <div class="col-md-6">
+        <div class="card card-custom h-100" style="background: linear-gradient(135deg, #fdfcfb 0%, #e2d1c3 100%); opacity: 0.9;">
+            <div class="text-uppercase small fw-medium text-secondary mb-2">Bekleyen Toplam Alacak</div>
+            <div class="h1 mb-3" style="color: #4a4a4a;">{{ "{:,.2f}".format(alacak) }} <span class="fs-4">₺</span></div>
+            
+            <!-- SADELEŞTİRİLMİŞ KUR GÖSTERİMİ -->
+            <div class="d-flex flex-wrap align-items-center text-muted small gap-4 mt-auto">
+                <span class="d-flex align-items-center" title="Dolar">
+                    <i class="bi bi-currency-dollar fs-5 text-secondary"></i><strong class="ms-1 text-dark fs-6">{{ kurlar.USD }}</strong>
+                </span>
+                <span class="d-flex align-items-center" title="Euro">
+                    <i class="bi bi-currency-euro fs-5 text-secondary"></i><strong class="ms-1 text-dark fs-6">{{ kurlar.EUR }}</strong>
+                </span>
+                <span class="d-flex align-items-center" title="Sterlin">
+                    <i class="bi bi-currency-pound fs-5 text-secondary"></i><strong class="ms-1 text-dark fs-6">{{ kurlar.GBP }}</strong>
+                </span>
+                
+                <div class="w-100 mt-2 pt-2 border-top border-dark border-opacity-10" style="font-size: 0.7rem;">
+                    <i class="bi bi-clock me-1"></i>Son Güncelleme: {{ kurlar.tarih }}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Aktif İş Sayısı ve Hızlı Butonlar -->
+    <div class="col-md-6">
+        <div class="card card-custom h-100" style="background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);">
+            <div class="text-uppercase small fw-medium text-secondary mb-2">Aktif Sipariş Takibi</div>
+            <div class="h1 mb-3" style="color: #4a4a4a;">{{ is_sayisi }} <span class="fs-4">Adet</span></div>
+            
+            <!-- Buton Grubu -->
+            <div class="mt-auto d-flex flex-wrap gap-2">
+                <a href="/is_ekle" class="btn btn-sm btn-light text-primary fw-medium shadow-sm rounded-pill px-3">
+                    <i class="bi bi-plus-lg me-1"></i>YENİ İŞ
+                </a>
+                <!-- YENİ EKLENEN BUTON -->
+                <button class="btn btn-sm btn-light text-dark fw-medium shadow-sm rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#hizliMusteriEkleModal">
+                    <i class="bi bi-person-plus-fill me-1"></i>MÜŞTERİ EKLE
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Yaklaşan Teslimatlar Tablosu -->
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-end mb-4">
+            <div>
+                <h4 class="mb-1">Teslimat Takvimi</h4>
+                <p class="text-muted small mb-0">En yakın tarihte teslim edilecek 5 iş kaydı.</p>
+            </div>
+            <a href="/kurlari_guncelle" class="btn btn-sm btn-outline-secondary rounded-pill px-3" style="font-size: 0.75rem;">KURLARI YENİLE</a>
+        </div>
+        
+        <div class="card card-custom p-0 overflow-hidden shadow-sm border-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th class="ps-4">Müşteri & İş</th>
+                            <th>Teslimat Tarihi</th>
+                            <th class="text-end pe-4">Durum</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for is in yaklasan_isler %}
+                        <tr>
+                            <td class="ps-4">
+                                <div class="text-dark fw-medium">{{ is.sahibi.ad_soyad }}</div>
+                                <div class="small text-muted">{{ is.is_tanimi }}</div>
+                            </td>
+                            <td>
+                                <span class="small">
+                                    <i class="bi bi-calendar3 me-2 text-secondary"></i>{{ is.teslim_tarihi }}
+                                </span>
+                            </td>
+                            <td class="text-end pe-4">
+                                <span class="badge rounded-pill badge-pastel-blue px-3 py-2" style="font-weight: 400; color: #4a6fa5; background-color: #d0ebff;">
+                                    Üretimde
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        
+                        {% if not yaklasan_isler %}
+                        <tr>
+                            <td colspan="3" class="text-center py-5 text-muted">
+                                <i class="bi bi-inbox fs-2 d-block mb-2 text-light"></i>
+                                Kayıtlı aktif iş bulunamadı.
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hızlı Müşteri Ekleme Modalı (Index Sayfasına Eklendi) -->
+<div class="modal fade" id="hizliMusteriEkleModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow" style="border-radius: 25px;">
+            <div class="modal-body p-5">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h5 class="fw-bold m-0">Hızlı Müşteri Kaydı</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                
+                <form action="/musteri_ekle" method="POST">
+                    <div class="mb-3">
+                        <label class="form-label small fw-medium">AD SOYAD</label>
+                        <input type="text" name="ad_soyad" class="form-control border-0 bg-light p-3" style="border-radius: 12px;" placeholder="Örn: Ahmet Yılmaz" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-medium">TELEFON</label>
+                        <input type="text" name="telefon" class="form-control border-0 bg-light p-3" style="border-radius: 12px;" placeholder="05XX XXX XX XX">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-medium text-primary">İŞYERİ ADI</label>
+                        <input type="text" name="isyeri_adi" class="form-control border-0 bg-light p-3" style="border-radius: 12px;" placeholder="Örn: Vizyon Reklam A.Ş.">
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label small fw-medium text-primary">İŞYERİ ADRESİ</label>
+                        <textarea name="isyeri_adresi" class="form-control border-0 bg-light p-3" style="border-radius: 12px;" rows="3" placeholder="Açık adres bilgilerini buraya yazabilirsiniz..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-yvr-primary w-100 py-3 shadow">SİSTEME KAYDET</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

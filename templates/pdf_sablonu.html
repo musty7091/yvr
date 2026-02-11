@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: 'DejaVu Sans', sans-serif; padding: 20px; color: #2c3e50; }
+        .header { display: flex; align-items: center; border-bottom: 4px solid #f1c40f; padding-bottom: 20px; margin-bottom: 30px; }
+        .logo { height: 80px; margin-right: 25px; }
+        .company-name { font-size: 24px; font-weight: bold; color: #2c3e50; margin: 0; }
+        .title { font-size: 14px; color: #e74c3c; font-weight: bold; margin-top: 5px; }
+        .customer-info { margin-bottom: 30px; font-size: 13px; }
+        .main-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+        .main-table th { background-color: #2c3e50; color: white; padding: 10px; text-align: left; font-size: 12px; }
+        .main-table td { border-bottom: 1px solid #eee; padding: 10px; font-size: 11px; }
+        .total-box { background: #2c3e50; color: white; padding: 20px; border-radius: 10px; text-align: right; margin-top: 30px; }
+        .total-amount { font-size: 24px; font-weight: bold; color: #f1c40f; }
+        .footer { margin-top: 50px; text-align: center; font-size: 10px; color: #7f8c8d; border-top: 1px solid #eee; padding-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="{{ logo_url }}" class="logo">
+        <div>
+            <div class="company-name">YVR - YENİ VİZYON REKLAM</div>
+            <div class="title">MÜŞTERİ HESAP EKSTRE DÖKÜMÜ</div>
+        </div>
+    </div>
+    
+    <div class="customer-info">
+        <table style="width: 100%;">
+            <tr>
+                <td style="width: 70%;">
+                    <strong>Müşteri:</strong> {{ musteri.ad_soyad }}<br>
+                    {% if musteri.isyeri_adi %}<strong>İşyeri:</strong> {{ musteri.isyeri_adi }}<br>{% endif %}
+                    {% if musteri.isyeri_adresi %}<strong>Adres:</strong> {{ musteri.isyeri_adresi }}<br>{% endif %}
+                    <strong>Tel:</strong> {{ musteri.telefon or '-' }}
+                </td>
+                <td style="text-align: right; vertical-align: top;">
+                    <strong>Döküm Tarihi:</strong> {{ bugun }}
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <h3 style="color: #e74c3c; font-size: 14px;">YAPILAN İŞLER</h3>
+    <table class="main-table">
+        <thead><tr><th>Tarih</th><th>Açıklama</th><th style="text-align: right;">Bedel</th></tr></thead>
+        <tbody>
+            {% for is in musteri.isler %}
+            <tr><td>{{ is.kayit_tarihi.strftime('%d.%m.%Y') }}</td><td>{{ is.is_tanimi }}</td><td style="text-align: right;">{{ "{:,.2f}".format(is.toplam_bedel) }} {{ is.para_birimi }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h3 style="color: #27ae60; font-size: 14px;">ALINAN TAHSİLATLAR</h3>
+    <table class="main-table">
+        <thead><tr><th>Tarih</th><th>Açıklama / İşlem Kuru</th><th style="text-align: right;">Miktar</th></tr></thead>
+        <tbody>
+            {% for o in musteri.odemeler %}
+            <tr>
+                <td>{{ o.odeme_tarihi.strftime('%d.%m.%Y') }}</td>
+                <td>{{ o.aciklama }} {% if o.birim != 'TL' %}(Kur: {{ "{:,.4f}".format(o.kur_degeri) }} ₺){% endif %}</td>
+                <td style="text-align: right; color: #27ae60; font-weight: bold;">+ {{ "{:,.2f}".format(o.tutar) }} {{ o.birim }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="total-box">
+        <div style="font-size: 12px; opacity: 0.8; margin-bottom: 5px;">TOPLAM KALAN BORÇ</div>
+        <div class="total-amount">{{ "{:,.2f}".format(toplam_tl) }} ₺</div>
+        <div style="font-size: 14px; opacity: 0.9;">({{ "{:,.2f}".format(toplam_usd) }} $)</div>
+    </div>
+
+    <div class="footer">
+        Bu belge sistem tarafından otomatik oluşturulmuştur.<br>
+        <strong>Yeni Vizyon Reklam | Tabela - Tasarım - Uygulama</strong>
+    </div>
+</body>
+</html>

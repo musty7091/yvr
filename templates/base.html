@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}YVR Reklam{% endblock %}</title>
+    <!-- Modern & Hafif Yazı Tipi -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --yvr-bg: #fdfdfd;
+            --yvr-card-bg: #ffffff;
+            --yvr-primary: #a2d2ff; /* Pastel Mavi */
+            --yvr-secondary: #bde0fe;
+            --yvr-accent: #ffafcc; /* Pastel Pembe */
+            --yvr-text: #576574;
+            --yvr-text-dark: #2c3e50;
+        }
+        
+        body { 
+            background-color: var(--yvr-bg); 
+            font-family: 'Outfit', sans-serif; 
+            color: var(--yvr-text);
+            font-weight: 400;
+            line-height: 1.6;
+        }
+
+        /* Bold Yazıları Yumuşat */
+        h1, h2, h3, h4, h5, .fw-bold { 
+            font-weight: 500 !important; 
+            color: var(--yvr-text-dark);
+        }
+
+        .navbar-yvr { 
+            background-color: white; 
+            border-bottom: 1px solid #f1f1f1; 
+            padding: 1rem 0;
+        }
+
+        .navbar-brand img { 
+            height: 40px; 
+            width: auto; 
+            filter: grayscale(20%);
+        }
+        
+        .nav-link { 
+            color: var(--yvr-text) !important; 
+            font-size: 0.95rem;
+            margin: 0 5px;
+            transition: all 0.3s;
+        }
+        .nav-link:hover { color: var(--yvr-primary) !important; }
+
+        .card-custom { 
+            background: var(--yvr-card-bg); 
+            border-radius: 20px; 
+            border: none; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.02);
+            padding: 1.5rem;
+        }
+
+        .btn-yvr-primary { 
+            background-color: var(--yvr-primary); 
+            color: #4a6fa5; 
+            border-radius: 12px; 
+            border: none; 
+            padding: 12px 25px;
+            font-weight: 500;
+            transition: transform 0.2s;
+        }
+        .btn-yvr-primary:hover { transform: translateY(-2px); background-color: var(--yvr-secondary); }
+
+        .table { --bs-table-bg: transparent; }
+        .table thead th { 
+            font-weight: 500; 
+            text-transform: uppercase; 
+            font-size: 0.75rem; 
+            letter-spacing: 1px; 
+            color: #a0a0a0;
+            border: none;
+        }
+        .table td { border-bottom: 1px solid #f8f9fa; padding: 15px 10px; font-weight: 300; }
+
+        /* Pastel Rozetler */
+        .badge-pastel-blue { background-color: #d0ebff; color: #1971c2; }
+        .badge-pastel-green { background-color: #e3fafc; color: #0b7285; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #d1d1d1; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-yvr sticky-top">
+    <div class="container">
+        <a class="navbar-brand d-flex align-items-center" href="/">
+            <img src="/static/logo.png" alt="YVR Logo" onerror="this.src='https://via.placeholder.com/40x40?text=YVR'">
+            <span class="ms-3 fw-bold text-dark" style="letter-spacing: 1px;">YVR REKLAM</span>
+        </a>
+        <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="bi bi-list fs-2"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto align-items-center">
+                <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-house-heart me-1"></i> Özet</a></li>
+                <li class="nav-item"><a class="nav-link" href="/musteriler"><i class="bi bi-people me-1"></i> Müşteriler</a></li>
+                <li class="nav-item"><a class="nav-link" href="/is_ekle"><i class="bi bi-plus-circle me-1"></i> Yeni Kayıt</a></li>
+                <li class="nav-item ms-lg-3"><a class="btn btn-light btn-sm px-4 rounded-pill text-danger" href="/logout" style="font-size: 0.8rem;">GÜVENLİ ÇIKIŞ</a></li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<div class="container py-5">
+    {% block content %}{% endblock %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
