@@ -3,17 +3,33 @@
 
 {% block content %}
 <div class="row mb-4 align-items-center">
-    <div class="col">
+    <div class="col-md-5">
         <h3 class="mb-1">Müşteri Portföyü</h3>
-        <p class="text-muted small">Tüm kayıtlı müşterilerinizin iletişim ve işyeri bilgileri.</p>
+        <p class="text-muted small mb-0">Tüm kayıtlı müşterilerinizin iletişim ve işyeri bilgileri.</p>
     </div>
-    <div class="col-auto d-flex gap-2">
+    
+    <div class="col-md-4 mt-3 mt-md-0">
+        <form action="/musteriler" method="GET" class="d-flex shadow-sm rounded-pill overflow-hidden border">
+            <input type="text" name="q" class="form-control border-0 ps-4" placeholder="Müşteri veya İşyeri Ara..." value="{{ terim or '' }}" style="background-color: #fff;">
+            
+            {% if arama_var %}
+            <a href="/musteriler" class="btn btn-white border-0 text-danger bg-white d-flex align-items-center" title="Aramayı Temizle">
+                <i class="bi bi-x-lg"></i>
+            </a>
+            {% endif %}
+            
+            <button type="submit" class="btn btn-white border-0 text-primary bg-white px-3">
+                <i class="bi bi-search"></i>
+            </button>
+        </form>
+    </div>
+
+    <div class="col-md-3 mt-3 mt-md-0 text-md-end d-flex justify-content-md-end gap-2">
         <a href="/pasif_musteriler" class="btn btn-light text-secondary border shadow-sm" title="Silinenleri Gör">
-            <i class="bi bi-archive me-2"></i>ARŞİV
+            <i class="bi bi-archive"></i>
         </a>
-        
         <button class="btn btn-yvr-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#musteriEkleModal">
-            <i class="bi bi-person-plus me-2"></i>MÜŞTERİ EKLE
+            <i class="bi bi-person-plus me-2"></i>EKLE
         </button>
     </div>
 </div>
@@ -53,7 +69,13 @@
                 {% endfor %}
                 {% if not musteriler %}
                 <tr>
-                    <td colspan="3" class="text-center py-5 text-muted small">Kayıtlı müşteri bulunmamaktadır.</td>
+                    <td colspan="3" class="text-center py-5 text-muted small">
+                        {% if arama_var %}
+                            "{{ terim }}" aramasıyla eşleşen müşteri bulunamadı.
+                        {% else %}
+                            Kayıtlı müşteri bulunmamaktadır.
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endif %}
             </tbody>

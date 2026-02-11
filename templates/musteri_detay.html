@@ -25,7 +25,7 @@
             <i class="bi bi-cash-coin me-2"></i>TAHSİLAT EKLE
         </button>
         <a href="/pdf_indir/{{ musteri.id }}" class="btn btn-outline-dark btn-sm rounded-pill px-4 py-2">
-            <i class="bi bi-file-earmark-pdf me-2"></i>PDF İNDİR
+            <i class="bi bi-file-earmark-pdf me-2"></i>HESAP EKSTRESİ (pdf)
         </a>
     </div>
 </div>
@@ -89,6 +89,11 @@
                     <tr>
                         <td class="ps-4">
                             <div class="fw-medium text-dark small">{{ o.aciklama }}</div>
+                            
+                            <div style="font-size: 0.7rem;" class="text-muted mt-1">
+                                <i class="bi bi-calendar3 me-1"></i>{{ o.odeme_tarihi.strftime('%d.%m.%Y') }}
+                            </div>
+                            
                             {% if o.birim != 'TL' %}<div style="font-size: 0.65rem;" class="text-muted">Kur: {{ o.kur_degeri }}</div>{% endif %}
                         </td>
                         <td class="text-end pe-4">

@@ -2,6 +2,7 @@ import requests
 import xml.etree.ElementTree as ET
 from flask import Flask, render_template, request, redirect, url_for, session, make_response
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import or_  # YENİ EKLENEN: Arama sorgusu için gerekli (VEYA mantığı)
 from datetime import datetime
 import pdfkit
 import os
@@ -112,19 +113,34 @@ def logout():
     session.pop('logged_in', None)
     return redirect(url_for('index'))
 
+# --- GÜNCELLENEN: MÜŞTERİLER ROTASI (ARAMA DESTEKLİ) ---
 @app.route('/musteriler')
 def musteriler():
     if 'logged_in' not in session: return redirect(url_for('index'))
-    return render_template('musteriler.html', musteriler=Musteri.query.filter_by(durum='Aktif').all())
+    
+    # Arama terimini al (urlde ?q=ahmet gibi gelir)
+    arama_terimi = request.args.get('q')
+    
+    if arama_terimi:
+        # Hem AD SOYAD içinde HEM DE İŞYERİ ADI içinde arama yap
+        # Ve sadece AKTİF olanları getir
+        bulunanlar = Musteri.query.filter(
+            Musteri.durum == 'Aktif',
+            or_(
+                Musteri.ad_soyad.contains(arama_terimi),
+                Musteri.isyeri_adi.contains(arama_terimi)
+            )
+        ).all()
+        return render_template('musteriler.html', musteriler=bulunanlar, arama_var=True, terim=arama_terimi)
+    
+    # Arama yoksa hepsini getir
+    return render_template('musteriler.html', musteriler=Musteri.query.filter_by(durum='Aktif').all(), arama_var=False)
 
-# --- YENİ EKLENEN: PASİF MÜŞTERİLERİ LİSTELE ---
 @app.route('/pasif_musteriler')
 def pasif_musteriler():
     if 'logged_in' not in session: return redirect(url_for('index'))
-    # Sadece durumu 'Pasif' olanları listele
     return render_template('pasif_musteriler.html', musteriler=Musteri.query.filter_by(durum='Pasif').all())
 
-# --- YENİ EKLENEN: MÜŞTERİYİ TEKRAR AKTİF ET (GERİ YÜKLE) ---
 @app.route('/musteri_aktif_et/<int:id>')
 def musteri_aktif_et(id):
     if 'logged_in' not in session: return redirect(url_for('index'))
