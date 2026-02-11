@@ -7,7 +7,11 @@
         <h3 class="mb-1">Müşteri Portföyü</h3>
         <p class="text-muted small">Tüm kayıtlı müşterilerinizin iletişim ve işyeri bilgileri.</p>
     </div>
-    <div class="col-auto">
+    <div class="col-auto d-flex gap-2">
+        <a href="/pasif_musteriler" class="btn btn-light text-secondary border shadow-sm" title="Silinenleri Gör">
+            <i class="bi bi-archive me-2"></i>ARŞİV
+        </a>
+        
         <button class="btn btn-yvr-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#musteriEkleModal">
             <i class="bi bi-person-plus me-2"></i>MÜŞTERİ EKLE
         </button>
@@ -43,7 +47,7 @@
                         
                         <a href="/musteri_duzenle/{{ m.id }}" class="btn btn-sm btn-light text-primary rounded-circle me-1" style="width: 32px; height: 32px;" title="Düzenle"><i class="bi bi-pencil-square"></i></a>
                         
-                        <a href="/musteri_sil/{{ m.id }}" onclick="return confirm('Bu müşteriyi ve tüm kayıtlarını silmek istediğinize emin misiniz?');" class="btn btn-sm btn-light text-danger rounded-circle" style="width: 32px; height: 32px;" title="Sil"><i class="bi bi-trash"></i></a>
+                        <a href="/musteri_sil/{{ m.id }}" onclick="return confirm('Bu müşteriyi listeden kaldırmak istediğinize emin misiniz? (Geçmiş işlemleri varsa silinmez, arşive kaldırılır.)');" class="btn btn-sm btn-light text-danger rounded-circle" style="width: 32px; height: 32px;" title="Listeden Kaldır"><i class="bi bi-trash"></i></a>
                     </td>
                 </tr>
                 {% endfor %}

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Arşiv / Pasif Müşteriler{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center">
+    <div class="col">
+        <h3 class="mb-1 text-secondary">Müşteri Arşivi</h3>
+        <p class="text-muted small">Daha önce listeden kaldırılan (pasif) kayıtlar. İşlem yapmak için geri yükleyiniz.</p>
+    </div>
+    <div class="col-auto">
+        <a href="/musteriler" class="btn btn-outline-dark rounded-pill px-4 shadow-sm">
+            <i class="bi bi-arrow-left me-2"></i>LİSTEYE DÖN
+        </a>
+    </div>
+</div>
+
+<div class="card card-custom p-0 overflow-hidden shadow-sm border-0 bg-light">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead style="background-color: #e9ecef;">
+                <tr>
+                    <th class="ps-4">Müşteri Adı / İşyeri</th>
+                    <th>İletişim</th>
+                    <th class="text-end pe-4">Geri Yükle</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in musteriler %}
+                <tr>
+                    <td class="ps-4">
+                        <div class="fw-medium text-secondary">{{ m.ad_soyad }}</div>
+                        {% if m.isyeri_adi %}
+                        <div class="small text-muted" style="font-size: 0.85rem;">{{ m.isyeri_adi }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="small text-muted">{{ m.telefon or '-' }}</div>
+                    </td>
+                    <td class="text-end pe-4">
+                        <a href="/musteri_aktif_et/{{ m.id }}" onclick="return confirm('Bu müşteriyi tekrar aktif listeye almak istiyor musunuz?');" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm">
+                            <i class="bi bi-arrow-counterclockwise me-2"></i>AKTİF ET
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not musteriler %}
+                <tr>
+                    <td colspan="3" class="text-center py-5 text-muted small">Arşivde kayıtlı müşteri yok.</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

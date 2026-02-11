@@ -1,6 +1,6 @@
 import requests
 import xml.etree.ElementTree as ET
-from flask import Flask, render_template, request, redirect, url_for, session, make_response, flash
+from flask import Flask, render_template, request, redirect, url_for, session, make_response
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import pdfkit
@@ -22,7 +22,8 @@ class Musteri(db.Model):
     ad_soyad = db.Column(db.String(100), nullable=False)
     telefon = db.Column(db.String(20))
     isyeri_adi = db.Column(db.String(200)) 
-    isyeri_adresi = db.Column(db.Text)      
+    isyeri_adresi = db.Column(db.Text)
+    durum = db.Column(db.String(20), default='Aktif') 
     isler = db.relationship('IsKaydi', backref='sahibi', lazy=True)
     odemeler = db.relationship('Odeme', backref='musteri', lazy=True)
 
@@ -72,11 +73,13 @@ def index():
     if 'logged_in' not in session:
         return render_template('giris.html')
     
-    isler = IsKaydi.query.all()
-    toplam_alacak_tl = 0
+    aktif_musteriler = Musteri.query.filter_by(durum='Aktif').all()
     
-    musteriler = Musteri.query.all()
-    for m in musteriler:
+    toplam_alacak_tl = 0
+    aktif_is_sayisi = 0
+    
+    for m in aktif_musteriler:
+        aktif_is_sayisi += len(m.isler)
         for i in m.isler:
             kur = GUNCEL_KURLAR.get(i.para_birimi, 1.0)
             toplam_alacak_tl += (i.toplam_bedel * kur)
@@ -84,11 +87,12 @@ def index():
             kur = GUNCEL_KURLAR.get(o.birim, 1.0)
             toplam_alacak_tl -= (o.tutar * kur)
             
-    yaklasan_isler = IsKaydi.query.filter(IsKaydi.teslim_tarihi != "").order_by(IsKaydi.teslim_tarihi.asc()).limit(5).all()
+    tum_yaklasan = IsKaydi.query.filter(IsKaydi.teslim_tarihi != "").order_by(IsKaydi.teslim_tarihi.asc()).all()
+    yaklasan_isler = [is_kaydi for is_kaydi in tum_yaklasan if is_kaydi.sahibi.durum == 'Aktif'][:5]
             
     return render_template('index.html', 
                            alacak=round(toplam_alacak_tl, 2), 
-                           is_sayisi=len(isler), 
+                           is_sayisi=aktif_is_sayisi, 
                            yaklasan_isler=yaklasan_isler,
                            kurlar=GUNCEL_KURLAR)
 
@@ -111,7 +115,23 @@ def logout():
 @app.route('/musteriler')
 def musteriler():
     if 'logged_in' not in session: return redirect(url_for('index'))
-    return render_template('musteriler.html', musteriler=Musteri.query.all())
+    return render_template('musteriler.html', musteriler=Musteri.query.filter_by(durum='Aktif').all())
+
+# --- YENİ EKLENEN: PASİF MÜŞTERİLERİ LİSTELE ---
+@app.route('/pasif_musteriler')
+def pasif_musteriler():
+    if 'logged_in' not in session: return redirect(url_for('index'))
+    # Sadece durumu 'Pasif' olanları listele
+    return render_template('pasif_musteriler.html', musteriler=Musteri.query.filter_by(durum='Pasif').all())
+
+# --- YENİ EKLENEN: MÜŞTERİYİ TEKRAR AKTİF ET (GERİ YÜKLE) ---
+@app.route('/musteri_aktif_et/<int:id>')
+def musteri_aktif_et(id):
+    if 'logged_in' not in session: return redirect(url_for('index'))
+    musteri = Musteri.query.get_or_404(id)
+    musteri.durum = 'Aktif'
+    db.session.commit()
+    return redirect(url_for('musteriler'))
 
 @app.route('/musteri_ekle', methods=['POST'])
 def musteri_ekle():
@@ -119,12 +139,12 @@ def musteri_ekle():
         ad_soyad=request.form.get('ad_soyad'), 
         telefon=request.form.get('telefon'),
         isyeri_adi=request.form.get('isyeri_adi'),
-        isyeri_adresi=request.form.get('isyeri_adresi')
+        isyeri_adresi=request.form.get('isyeri_adresi'),
+        durum='Aktif'
     ))
     db.session.commit()
     return redirect(url_for('musteriler'))
 
-# --- YENİ EKLENEN: MÜŞTERİ DÜZENLEME ROTASI ---
 @app.route('/musteri_duzenle/<int:id>', methods=['GET', 'POST'])
 def musteri_duzenle(id):
     if 'logged_in' not in session: return redirect(url_for('index'))
@@ -140,31 +160,24 @@ def musteri_duzenle(id):
     
     return render_template('musteri_duzenle.html', musteri=musteri)
 
-# --- YENİ EKLENEN: MÜŞTERİ SİLME ROTASI ---
 @app.route('/musteri_sil/<int:id>')
 def musteri_sil(id):
     if 'logged_in' not in session: return redirect(url_for('index'))
     musteri = Musteri.query.get_or_404(id)
     
-    # Müşteriyi silmeden önce ona bağlı işleri ve ödemeleri siliyoruz
-    # Bu işlem veritabanı hatası almamak için önemlidir.
-    try:
-        for is_kaydi in musteri.isler:
-            db.session.delete(is_kaydi)
-        for odeme in musteri.odemeler:
-            db.session.delete(odeme)
-            
+    if musteri.isler or musteri.odemeler:
+        musteri.durum = 'Pasif'
+        db.session.commit()
+    else:
         db.session.delete(musteri)
         db.session.commit()
-    except Exception as e:
-        print(f"Hata oluştu: {e}")
         
     return redirect(url_for('musteriler'))
 
 @app.route('/is_ekle')
 def is_ekle():
     if 'logged_in' not in session: return redirect(url_for('index'))
-    return render_template('is_ekle.html', musteriler=Musteri.query.all())
+    return render_template('is_ekle.html', musteriler=Musteri.query.filter_by(durum='Aktif').all())
 
 @app.route('/is_kaydet', methods=['POST'])
 def is_kaydet():
@@ -199,7 +212,6 @@ def is_kaydet():
     db.session.commit()
     return redirect(url_for('index'))
 
-# --- YENİ EKLENEN: İŞ SİLME ROTASI ---
 @app.route('/is_sil/<int:id>')
 def is_sil(id):
     if 'logged_in' not in session: return redirect(url_for('index'))
@@ -225,7 +237,6 @@ def musteri_odeme_ekle(m_id):
     db.session.commit()
     return redirect(url_for('musteri_detay', id=m_id))
 
-# --- YENİ EKLENEN: ÖDEME SİLME ROTASI ---
 @app.route('/odeme_sil/<int:id>')
 def odeme_sil(id):
     if 'logged_in' not in session: return redirect(url_for('index'))
@@ -276,7 +287,6 @@ def pdf_indir(id):
                                bugun=datetime.now().strftime('%d.%m.%Y'),
                                logo_url=logo_path)
 
-    # NOT: Bu yol kendi bilgisayarına göredir. Hata alırsan kontrol et.
     path_wkhtmltopdf = r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
     config = pdfkit.configuration(wkhtmltopdf=path_wkhtmltopdf)
     
