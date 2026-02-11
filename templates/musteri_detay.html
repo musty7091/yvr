@@ -48,7 +48,7 @@
                 <thead>
                     <tr class="bg-light">
                         <th class="ps-4">Açıklama</th>
-                        <th class="text-end pe-4">Tutar & İşlem</th>
+                        <th class="text-end pe-4">Tutar & Durum</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -59,8 +59,22 @@
                             <div style="font-size: 0.75rem;" class="text-muted">{{ is.kayit_tarihi.strftime('%d.%m.%Y') }}</div>
                         </td>
                         <td class="text-end pe-4">
-                            <span class="fw-medium me-3">{{ "{:,.2f}".format(is.toplam_bedel) }} {{ is.para_birimi }}</span>
-                            <a href="/is_sil/{{ is.id }}" onclick="return confirm('Bu iş kaydını silmek istediğinize emin misiniz? Bakiyeden düşülecektir.');" class="text-danger small"><i class="bi bi-trash"></i></a>
+                            <div class="d-flex justify-content-end align-items-center gap-3">
+                                <span class="fw-medium">{{ "{:,.2f}".format(is.toplam_bedel) }} {{ is.para_birimi }}</span>
+                                
+                                {% if is.durum == 'Devam Ediyor' %}
+                                    <a href="/is_teslim_et/{{ is.id }}" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1" style="font-size: 0.75rem;">
+                                        TESLİM ET
+                                    </a>
+                                {% else %}
+                                    <span class="badge bg-success rounded-pill px-2 py-1 fw-normal" style="font-size: 0.7rem;">
+                                        <i class="bi bi-check-lg me-1"></i>TESLİM EDİLDİ
+                                    </span>
+                                    <a href="/is_durum_geri_al/{{ is.id }}" class="text-muted small" title="Geri Al (Devam Ediyor yap)"><i class="bi bi-arrow-counterclockwise"></i></a>
+                                {% endif %}
+                                
+                                <a href="/is_sil/{{ is.id }}" onclick="return confirm('Bu iş kaydını silmek istediğinize emin misiniz? Bakiyeden düşülecektir.');" class="text-danger small"><i class="bi bi-trash"></i></a>
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
@@ -89,11 +103,9 @@
                     <tr>
                         <td class="ps-4">
                             <div class="fw-medium text-dark small">{{ o.aciklama }}</div>
-                            
                             <div style="font-size: 0.7rem;" class="text-muted mt-1">
                                 <i class="bi bi-calendar3 me-1"></i>{{ o.odeme_tarihi.strftime('%d.%m.%Y') }}
                             </div>
-                            
                             {% if o.birim != 'TL' %}<div style="font-size: 0.65rem;" class="text-muted">Kur: {{ o.kur_degeri }}</div>{% endif %}
                         </td>
                         <td class="text-end pe-4">

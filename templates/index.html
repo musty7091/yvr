@@ -2,15 +2,63 @@
 {% block title %}Panel - YVR Reklam{% endblock %}
 
 {% block content %}
-<!-- Üst Özet Kartları -->
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-6">
+        <div class="card card-custom p-3 border-0 h-100 shadow-sm d-flex flex-row align-items-center">
+            <div class="rounded-circle p-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background-color: #e3f2fd; color: #1565c0;">
+                <i class="bi bi-people-fill fs-5"></i>
+            </div>
+            <div class="ms-3">
+                <div class="small text-muted fw-bold" style="font-size: 0.75rem;">TOPLAM MÜŞTERİ</div>
+                <div class="fw-bold text-dark fs-5">{{ t_musteri }}</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 col-6">
+        <div class="card card-custom p-3 border-0 h-100 shadow-sm d-flex flex-row align-items-center">
+            <div class="rounded-circle p-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background-color: #e8f5e9; color: #2e7d32;">
+                <i class="bi bi-person-check-fill fs-5"></i>
+            </div>
+            <div class="ms-3">
+                <div class="small text-muted fw-bold" style="font-size: 0.75rem;">AKTİF MÜŞTERİ</div>
+                <div class="fw-bold text-dark fs-5">{{ a_musteri }}</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 col-6">
+        <div class="card card-custom p-3 border-0 h-100 shadow-sm d-flex flex-row align-items-center">
+            <div class="rounded-circle p-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background-color: #fff3e0; color: #ef6c00;">
+                <i class="bi bi-check-circle-fill fs-5"></i>
+            </div>
+            <div class="ms-3">
+                <div class="small text-muted fw-bold" style="font-size: 0.75rem;">TESLİM EDİLEN İŞ</div>
+                <div class="fw-bold text-dark fs-5">{{ biten_is }}</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 col-6">
+        <div class="card card-custom p-3 border-0 h-100 shadow-sm d-flex flex-row align-items-center">
+            <div class="rounded-circle p-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background-color: #f3e5f5; color: #7b1fa2;">
+                <i class="bi bi-wallet2 fs-5"></i>
+            </div>
+            <div class="ms-3">
+                <div class="small text-muted fw-bold" style="font-size: 0.75rem;">BU AYKİ CİRO (TL)</div>
+                <div class="fw-bold text-dark fs-5" style="color: #7b1fa2 !important;">{{ "{:,.0f}".format(ay_ciro) }} ₺</div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row g-4 mb-5">
-    <!-- Alacak Bakiyesi ve Sadeleştirilmiş Kurlar -->
     <div class="col-md-6">
         <div class="card card-custom h-100" style="background: linear-gradient(135deg, #fdfcfb 0%, #f8d5b8 100%); opacity: 0.9;">
             <div class="text-uppercase small fw-medium text-secondary mb-2">Bekleyen Toplam Alacaklar</div>
             <div class="h1 mb-3" style="color: #4a4a4a;">{{ "{:,.2f}".format(alacak) }} <span class="fs-4">₺</span></div>
             
-            <!-- SADELEŞTİRİLMİŞ KUR GÖSTERİMİ -->
             <div class="d-flex flex-wrap align-items-center text-muted small gap-4 mt-auto">
                 <span class="d-flex align-items-center" title="Dolar">
                     <i class="bi bi-currency-dollar fs-5 text-secondary"></i><strong class="ms-1 text-dark fs-6">{{ kurlar.USD }}</strong>
@@ -29,13 +77,11 @@
         </div>
     </div>
     
-    <!-- Aktif İş Sayısı ve Hızlı Butonlar -->
     <div class="col-md-6">
         <div class="card card-custom h-100" style="background: linear-gradient(135deg, #f5f7fa 0%, #bcd3f8 100%);">
-            <div class="text-uppercase small fw-medium text-secondary mb-2">Aktif Siparişler</div>
+            <div class="text-uppercase small fw-medium text-secondary mb-2">Devam Eden İşler</div>
             <div class="h1 mb-3" style="color: #4a4a4a;">{{ is_sayisi }} <span class="fs-4">Adet</span></div>
             
-            <!-- Buton Grubu -->
             <div class="mt-auto d-flex flex-wrap gap-2">
                 <button class="btn btn-sm btn-light text-dark fw-medium shadow-sm rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#hizliMusteriEkleModal">
                     <i class="bi bi-person-plus-fill me-1"></i>MÜŞTERİ EKLE
@@ -43,20 +89,17 @@
                 <a href="/is_ekle" class="btn btn-sm btn-light text-primary fw-medium shadow-sm rounded-pill px-3">
                     <i class="bi bi-plus-lg me-1"></i>YENİ İŞ
                 </a>
-                <!-- YENİ EKLENEN BUTON -->
-                
             </div>
         </div>
     </div>
 </div>
 
-<!-- Yaklaşan Teslimatlar Tablosu -->
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-end mb-4">
             <div>
                 <h4 class="mb-1">Yaklaşan Teslimat Takvimi</h4>
-                <p class="text-muted small mb-0">En yakın tarihte teslim edilecek 5 iş kaydı.</p>
+                <p class="text-muted small mb-0">En yakın tarihte teslim edilecek 5 aktif iş kaydı.</p>
             </div>
             <a href="/kurlari_guncelle" class="btn btn-sm btn-outline-secondary rounded-pill px-3" style="font-size: 0.75rem;">KURLARI YENİLE</a>
         </div>
@@ -85,7 +128,7 @@
                             </td>
                             <td class="text-end pe-4">
                                 <span class="badge rounded-pill badge-pastel-blue px-3 py-2" style="font-weight: 400; color: #4a6fa5; background-color: #d0ebff;">
-                                    Üretimde
+                                    {{ is.durum }}
                                 </span>
                             </td>
                         </tr>
@@ -95,7 +138,7 @@
                         <tr>
                             <td colspan="3" class="text-center py-5 text-muted">
                                 <i class="bi bi-inbox fs-2 d-block mb-2 text-light"></i>
-                                Kayıtlı aktif iş bulunamadı.
+                                Şu an bekleyen aktif iş bulunmuyor.
                             </td>
                         </tr>
                         {% endif %}
@@ -106,7 +149,6 @@
     </div>
 </div>
 
-<!-- Hızlı Müşteri Ekleme Modalı (Index Sayfasına Eklendi) -->
 <div class="modal fade" id="hizliMusteriEkleModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow" style="border-radius: 25px;">

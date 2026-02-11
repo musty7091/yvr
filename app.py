@@ -2,8 +2,8 @@ import requests
 import xml.etree.ElementTree as ET
 from flask import Flask, render_template, request, redirect, url_for, session, make_response
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import or_  # YENİ EKLENEN: Arama sorgusu için gerekli (VEYA mantığı)
-from datetime import datetime
+from sqlalchemy import or_
+from datetime import datetime, timedelta
 import pdfkit
 import os
 
@@ -11,6 +11,10 @@ app = Flask(__name__)
 app.secret_key = 'yvr_ozel_sifre_123'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///yvr_veritabani.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# GÜVENLİK: 3 Dakika işlem yapılmazsa oturum kapanır
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=3)
+
 db = SQLAlchemy(app)
 
 # --- GLOBAL HAFIZA (Günün Sabit Kurları) ---
@@ -34,6 +38,7 @@ class IsKaydi(db.Model):
     toplam_bedel = db.Column(db.Float, nullable=False, default=0.0)
     para_birimi = db.Column(db.String(5), default='TL')
     teslim_tarihi = db.Column(db.String(20))
+    durum = db.Column(db.String(20), default='Devam Ediyor')
     kayit_tarihi = db.Column(db.DateTime, default=datetime.now)
     musteri_id = db.Column(db.Integer, db.ForeignKey('musteri.id'), nullable=False)
 
@@ -74,28 +79,60 @@ def index():
     if 'logged_in' not in session:
         return render_template('giris.html')
     
+    # 1. TEMEL VERİLERİ HESAPLA
     aktif_musteriler = Musteri.query.filter_by(durum='Aktif').all()
     
     toplam_alacak_tl = 0
-    aktif_is_sayisi = 0
+    devam_eden_is_sayisi = 0
     
     for m in aktif_musteriler:
-        aktif_is_sayisi += len(m.isler)
         for i in m.isler:
+            if i.durum == 'Devam Ediyor':
+                devam_eden_is_sayisi += 1
             kur = GUNCEL_KURLAR.get(i.para_birimi, 1.0)
             toplam_alacak_tl += (i.toplam_bedel * kur)
+            
         for o in m.odemeler:
             kur = GUNCEL_KURLAR.get(o.birim, 1.0)
             toplam_alacak_tl -= (o.tutar * kur)
-            
-    tum_yaklasan = IsKaydi.query.filter(IsKaydi.teslim_tarihi != "").order_by(IsKaydi.teslim_tarihi.asc()).all()
+
+    # 2. YENİ İSTATİSTİKLER (Kartlar İçin)
+    # A) Müşteri Sayıları
+    toplam_musteri = Musteri.query.count()
+    aktif_musteri_sayisi = len(aktif_musteriler)
+    
+    # B) Tamamlanan İşler
+    biten_isler = IsKaydi.query.filter_by(durum='Teslim Edildi').count()
+    
+    # C) Bu Ayki Ciro (Kasa Girişi)
+    simdi = datetime.now()
+    tum_odemeler = Odeme.query.all()
+    bu_ayki_ciro = 0
+    
+    for o in tum_odemeler:
+        # Sadece bu ay ve bu yıl yapılan ödemeleri topla
+        if o.odeme_tarihi.month == simdi.month and o.odeme_tarihi.year == simdi.year:
+            kur = GUNCEL_KURLAR.get(o.birim, 1.0)
+            bu_ayki_ciro += (o.tutar * kur)
+
+    # 3. YAKLAŞAN İŞLER LİSTESİ
+    tum_yaklasan = IsKaydi.query.filter(
+        IsKaydi.teslim_tarihi != "", 
+        IsKaydi.durum == 'Devam Ediyor'
+    ).order_by(IsKaydi.teslim_tarihi.asc()).all()
+    
     yaklasan_isler = [is_kaydi for is_kaydi in tum_yaklasan if is_kaydi.sahibi.durum == 'Aktif'][:5]
             
     return render_template('index.html', 
                            alacak=round(toplam_alacak_tl, 2), 
-                           is_sayisi=aktif_is_sayisi, 
+                           is_sayisi=devam_eden_is_sayisi, 
                            yaklasan_isler=yaklasan_isler,
-                           kurlar=GUNCEL_KURLAR)
+                           kurlar=GUNCEL_KURLAR,
+                           # Yeni Değişkenler:
+                           t_musteri=toplam_musteri,
+                           a_musteri=aktif_musteri_sayisi,
+                           biten_is=biten_isler,
+                           ay_ciro=round(bu_ayki_ciro, 2))
 
 @app.route('/kurlari_guncelle')
 def kurlari_guncelle():
@@ -105,6 +142,7 @@ def kurlari_guncelle():
 @app.route('/login', methods=['POST'])
 def login():
     if request.form.get('username') == 'admin' and request.form.get('password') == '1234':
+        session.permanent = True 
         session['logged_in'] = True
     return redirect(url_for('index'))
 
@@ -113,17 +151,13 @@ def logout():
     session.pop('logged_in', None)
     return redirect(url_for('index'))
 
-# --- GÜNCELLENEN: MÜŞTERİLER ROTASI (ARAMA DESTEKLİ) ---
 @app.route('/musteriler')
 def musteriler():
     if 'logged_in' not in session: return redirect(url_for('index'))
     
-    # Arama terimini al (urlde ?q=ahmet gibi gelir)
     arama_terimi = request.args.get('q')
     
     if arama_terimi:
-        # Hem AD SOYAD içinde HEM DE İŞYERİ ADI içinde arama yap
-        # Ve sadece AKTİF olanları getir
         bulunanlar = Musteri.query.filter(
             Musteri.durum == 'Aktif',
             or_(
@@ -133,7 +167,6 @@ def musteriler():
         ).all()
         return render_template('musteriler.html', musteriler=bulunanlar, arama_var=True, terim=arama_terimi)
     
-    # Arama yoksa hepsini getir
     return render_template('musteriler.html', musteriler=Musteri.query.filter_by(durum='Aktif').all(), arama_var=False)
 
 @app.route('/pasif_musteriler')
@@ -207,6 +240,7 @@ def is_kaydet():
         toplam_bedel=round(t_bedel, 2),
         para_birimi=p_birimi,
         teslim_tarihi=request.form.get('teslim_tarihi'),
+        durum='Devam Ediyor',
         musteri_id=m_id
     )
     db.session.add(yeni_is)
@@ -227,6 +261,22 @@ def is_kaydet():
     
     db.session.commit()
     return redirect(url_for('index'))
+
+@app.route('/is_teslim_et/<int:id>')
+def is_teslim_et(id):
+    if 'logged_in' not in session: return redirect(url_for('index'))
+    is_kaydi = IsKaydi.query.get_or_404(id)
+    is_kaydi.durum = 'Teslim Edildi'
+    db.session.commit()
+    return redirect(url_for('musteri_detay', id=is_kaydi.musteri_id))
+
+@app.route('/is_durum_geri_al/<int:id>')
+def is_durum_geri_al(id):
+    if 'logged_in' not in session: return redirect(url_for('index'))
+    is_kaydi = IsKaydi.query.get_or_404(id)
+    is_kaydi.durum = 'Devam Ediyor'
+    db.session.commit()
+    return redirect(url_for('musteri_detay', id=is_kaydi.musteri_id))
 
 @app.route('/is_sil/<int:id>')
 def is_sil(id):
