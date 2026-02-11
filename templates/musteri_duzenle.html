@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Müşteri Düzenle - YENİ VİZYON{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card card-custom p-5 shadow-sm border-0">
+            <h4 class="fw-bold mb-4 text-center" style="color: #34495e;">Müşteri Bilgilerini Düzenle</h4>
+            
+            <form action="/musteri_duzenle/{{ musteri.id }}" method="POST">
+                <div class="mb-3">
+                    <label class="form-label small fw-medium">AD SOYAD</label>
+                    <input type="text" name="ad_soyad" class="form-control border-0 bg-light p-3" style="border-radius: 12px;" value="{{ musteri.ad_soyad }}" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-medium">TELEFON</label>
+                    <input type="text" name="telefon" class="form-control border-0 bg-light p-3" style="border-radius: 12px;" value="{{ musteri.telefon or '' }}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-medium text-primary">İŞYERİ ADI</label>
+                    <input type="text" name="isyeri_adi" class="form-control border-0 bg-light p-3" style="border-radius: 12px;" value="{{ musteri.isyeri_adi or '' }}">
+                </div>
+                <div class="mb-4">
+                    <label class="form-label small fw-medium text-primary">İŞYERİ ADRESİ</label>
+                    <textarea name="isyeri_adresi" class="form-control border-0 bg-light p-3" style="border-radius: 12px;" rows="3">{{ musteri.isyeri_adresi or '' }}</textarea>
+                </div>
+                
+                <div class="d-flex gap-2">
+                    <a href="/musteriler" class="btn btn-light w-50 py-3">İPTAL</a>
+                    <button type="submit" class="btn btn-yvr-primary w-50 py-3 shadow">GÜNCELLE</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

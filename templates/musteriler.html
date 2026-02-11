@@ -37,7 +37,13 @@
                         <div class="small text-muted"><i class="bi bi-telephone me-2"></i>{{ m.telefon or '-' }}</div>
                     </td>
                     <td class="text-end pe-4">
-                        <a href="/musteri/{{ m.id }}" class="btn btn-sm btn-light rounded-pill px-4" style="font-size: 0.8rem; border: 1px solid #eee;">DETAYLAR</a>
+                        <a href="/musteri/{{ m.id }}" class="btn btn-sm btn-yvr-primary fw-bold rounded-pill px-4 me-2 shadow-sm" title="Müşteri Detayına Git">
+                            DETAY
+                        </a>
+                        
+                        <a href="/musteri_duzenle/{{ m.id }}" class="btn btn-sm btn-light text-primary rounded-circle me-1" style="width: 32px; height: 32px;" title="Düzenle"><i class="bi bi-pencil-square"></i></a>
+                        
+                        <a href="/musteri_sil/{{ m.id }}" onclick="return confirm('Bu müşteriyi ve tüm kayıtlarını silmek istediğinize emin misiniz?');" class="btn btn-sm btn-light text-danger rounded-circle" style="width: 32px; height: 32px;" title="Sil"><i class="bi bi-trash"></i></a>
                     </td>
                 </tr>
                 {% endfor %}
@@ -51,7 +57,6 @@
     </div>
 </div>
 
-<!-- Müşteri Ekle Modal (Güncellendi: İşyeri Bilgileri Eklendi) -->
 <div class="modal fade" id="musteriEkleModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow" style="border-radius: 25px;">

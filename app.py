@@ -1,6 +1,6 @@
 import requests
 import xml.etree.ElementTree as ET
-from flask import Flask, render_template, request, redirect, url_for, session, make_response
+from flask import Flask, render_template, request, redirect, url_for, session, make_response, flash
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import pdfkit
@@ -21,8 +21,8 @@ class Musteri(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     ad_soyad = db.Column(db.String(100), nullable=False)
     telefon = db.Column(db.String(20))
-    isyeri_adi = db.Column(db.String(200)) # İşyeri adı alanı
-    isyeri_adresi = db.Column(db.Text)      # İşyeri adresi alanı
+    isyeri_adi = db.Column(db.String(200)) 
+    isyeri_adresi = db.Column(db.Text)      
     isler = db.relationship('IsKaydi', backref='sahibi', lazy=True)
     odemeler = db.relationship('Odeme', backref='musteri', lazy=True)
 
@@ -124,6 +124,43 @@ def musteri_ekle():
     db.session.commit()
     return redirect(url_for('musteriler'))
 
+# --- YENİ EKLENEN: MÜŞTERİ DÜZENLEME ROTASI ---
+@app.route('/musteri_duzenle/<int:id>', methods=['GET', 'POST'])
+def musteri_duzenle(id):
+    if 'logged_in' not in session: return redirect(url_for('index'))
+    musteri = Musteri.query.get_or_404(id)
+
+    if request.method == 'POST':
+        musteri.ad_soyad = request.form.get('ad_soyad')
+        musteri.telefon = request.form.get('telefon')
+        musteri.isyeri_adi = request.form.get('isyeri_adi')
+        musteri.isyeri_adresi = request.form.get('isyeri_adresi')
+        db.session.commit()
+        return redirect(url_for('musteriler'))
+    
+    return render_template('musteri_duzenle.html', musteri=musteri)
+
+# --- YENİ EKLENEN: MÜŞTERİ SİLME ROTASI ---
+@app.route('/musteri_sil/<int:id>')
+def musteri_sil(id):
+    if 'logged_in' not in session: return redirect(url_for('index'))
+    musteri = Musteri.query.get_or_404(id)
+    
+    # Müşteriyi silmeden önce ona bağlı işleri ve ödemeleri siliyoruz
+    # Bu işlem veritabanı hatası almamak için önemlidir.
+    try:
+        for is_kaydi in musteri.isler:
+            db.session.delete(is_kaydi)
+        for odeme in musteri.odemeler:
+            db.session.delete(odeme)
+            
+        db.session.delete(musteri)
+        db.session.commit()
+    except Exception as e:
+        print(f"Hata oluştu: {e}")
+        
+    return redirect(url_for('musteriler'))
+
 @app.route('/is_ekle')
 def is_ekle():
     if 'logged_in' not in session: return redirect(url_for('index'))
@@ -162,6 +199,16 @@ def is_kaydet():
     db.session.commit()
     return redirect(url_for('index'))
 
+# --- YENİ EKLENEN: İŞ SİLME ROTASI ---
+@app.route('/is_sil/<int:id>')
+def is_sil(id):
+    if 'logged_in' not in session: return redirect(url_for('index'))
+    is_kaydi = IsKaydi.query.get_or_404(id)
+    musteri_id = is_kaydi.musteri_id
+    db.session.delete(is_kaydi)
+    db.session.commit()
+    return redirect(url_for('musteri_detay', id=musteri_id))
+
 @app.route('/musteri_odeme_ekle/<int:m_id>', methods=['POST'])
 def musteri_odeme_ekle(m_id):
     birim = request.form.get('birim')
@@ -177,6 +224,16 @@ def musteri_odeme_ekle(m_id):
     db.session.add(yeni_odeme)
     db.session.commit()
     return redirect(url_for('musteri_detay', id=m_id))
+
+# --- YENİ EKLENEN: ÖDEME SİLME ROTASI ---
+@app.route('/odeme_sil/<int:id>')
+def odeme_sil(id):
+    if 'logged_in' not in session: return redirect(url_for('index'))
+    odeme = Odeme.query.get_or_404(id)
+    musteri_id = odeme.musteri_id
+    db.session.delete(odeme)
+    db.session.commit()
+    return redirect(url_for('musteri_detay', id=musteri_id))
 
 @app.route('/musteri/<int:id>')
 def musteri_detay(id):
@@ -219,6 +276,7 @@ def pdf_indir(id):
                                bugun=datetime.now().strftime('%d.%m.%Y'),
                                logo_url=logo_path)
 
+    # NOT: Bu yol kendi bilgisayarına göredir. Hata alırsan kontrol et.
     path_wkhtmltopdf = r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
     config = pdfkit.configuration(wkhtmltopdf=path_wkhtmltopdf)
     
@@ -239,5 +297,4 @@ if __name__ == '__main__':
     with app.app_context():
         db.create_all()
         kurlari_sabitle()
-    # BURASI DEĞİŞTİ: host='0.0.0.0' ekledik, böylece ağdaki diğer cihazlar görebilir.
     app.run(debug=True, host='0.0.0.0')
