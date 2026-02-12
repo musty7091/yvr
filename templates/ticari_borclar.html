@@ -9,7 +9,7 @@
 <div class="row mb-4 align-items-center">
     <div class="col-md-5">
         <h3 class="mb-1 text-danger">Tedarikçi Yönetimi</h3>
-        <p class="text-muted small mb-0">Malzeme aldığınız firmalar ve borç takibi.</p>
+        <p class="text-muted small mb-0">Tedarikçilere olan borçlarınız bakiyeye göre sıralanmıştır.</p>
     </div>
     
     <div class="col-md-4 mt-3 mt-md-0">
@@ -32,9 +32,10 @@
 <div class="card card-custom p-0 overflow-hidden shadow-sm border-0">
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
-            <thead style="background-color: #fdf2f2;"> <tr>
+            <thead style="background-color: #fdf2f2;">
+                <tr>
                     <th class="ps-4">Firma Adı / Yetkili</th>
-                    <th>İletişim</th>
+                    <th class="text-end">Güncel Bakiye (TL)</th>
                     <th class="text-end pe-4">İşlem</th>
                 </tr>
             </thead>
@@ -45,12 +46,32 @@
                         <div class="fw-bold text-dark">{{ t.firma_adi }}</div>
                         <div class="small text-muted">{{ t.yetkili_kisi or '-' }}</div>
                     </td>
-                    <td>
-                        <div class="small text-muted"><i class="bi bi-telephone me-2"></i>{{ t.telefon or '-' }}</div>
+                    
+                    <td class="text-end">
+                        {% if t.guncel_bakiye > 1 %}
+                            <span class="badge bg-danger bg-opacity-10 text-danger px-3 py-2 rounded-pill" style="font-size: 0.9rem;">
+                                - {{ "{:,.2f}".format(t.guncel_bakiye) }} ₺
+                            </span>
+                        {% elif t.guncel_bakiye < -1 %}
+                            <span class="text-success fw-bold small">
+                                + {{ "{:,.2f}".format(t.guncel_bakiye * -1) }} ₺ (Alacak)
+                            </span>
+                        {% else %}
+                            <span class="text-muted small">Borç Yok</span>
+                        {% endif %}
                     </td>
+
                     <td class="text-end pe-4">
-                        <a href="/tedarikci/{{ t.id }}" class="btn btn-sm btn-outline-danger fw-bold rounded-pill px-4 shadow-sm">
-                            DETAY & BORÇ
+                        <a href="/tedarikci/{{ t.id }}" class="btn btn-sm btn-outline-danger fw-bold rounded-pill px-3 shadow-sm me-1" title="Hesap Detayı">
+                            DETAY
+                        </a>
+                        
+                        <a href="/tedarikci_duzenle/{{ t.id }}" class="btn btn-sm btn-light text-primary rounded-circle me-1" style="width: 32px; height: 32px;" title="Düzenle">
+                            <i class="bi bi-pencil-square"></i>
+                        </a>
+                        
+                        <a href="/tedarikci_sil/{{ t.id }}" onclick="return confirm('Bu tedarikçiyi listeden kaldırmak/arşivlemek istediğinize emin misiniz?');" class="btn btn-sm btn-light text-danger rounded-circle" style="width: 32px; height: 32px;" title="Sil/Arşivle">
+                            <i class="bi bi-trash"></i>
                         </a>
                     </td>
                 </tr>

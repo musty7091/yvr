@@ -130,7 +130,6 @@ def index():
     bu_yil = bugun.year
     
     # 1. Alınan İş Hacmi (Ciro Potansiyeli)
-    # Bu ay eklenen işlerin toplam bedeli
     aylik_is_hacmi = 0
     bu_ayki_isler = IsKaydi.query.filter(
         extract('month', IsKaydi.kayit_tarihi) == bu_ay,
@@ -175,7 +174,6 @@ def index():
 def satislar():
     if 'logged_in' not in session: return redirect(url_for('index'))
     
-    # Eski index fonksiyonundaki mantığın aynısı
     aktif_musteriler = Musteri.query.filter_by(durum='Aktif').all()
     toplam_alacak_tl = 0
     devam_eden_is_sayisi = 0
@@ -221,19 +219,195 @@ def satislar():
                            biten_is=biten_is, 
                            ay_ciro=bu_ayki_ciro)
 
-# --- YENİ EKLENECEK MODÜLLER İÇİN (Şimdilik Boş) ---
+# --- TİCARİ BORÇLAR (TEDARİKÇİ) MODÜLÜ ---
+
 @app.route('/ticari_borclar')
 def ticari_borclar():
     if 'logged_in' not in session: return redirect(url_for('index'))
-    return render_template('base.html', content="<div class='alert alert-info m-5 text-center'><h3>Ticari Borçlar Modülü</h3><p>Yapım Aşamasında...</p><a href='/' class='btn btn-primary'>Ana Ekrana Dön</a></div>")
+    
+    # 1. Tedarikçileri Getir (Arama varsa filtrele, yoksa hepsini al)
+    arama_terimi = request.args.get('q')
+    if arama_terimi:
+        tedarikciler = Tedarikci.query.filter(
+            Tedarikci.durum == 'Aktif',
+            or_(
+                Tedarikci.firma_adi.contains(arama_terimi),
+                Tedarikci.yetkili_kisi.contains(arama_terimi)
+            )
+        ).all()
+    else:
+        tedarikciler = Tedarikci.query.filter_by(durum='Aktif').all()
+    
+    # 2. Her tedarikçinin GÜNCEL BAKİYESİNİ hesapla
+    for t in tedarikciler:
+        borc_toplam = 0
+        odeme_toplam = 0
+        
+        # Alımlar (Güncel Kurdan Hesaplanır - Çünkü borç bugünün parasıyla ödenir)
+        for alim in t.satin_almalar:
+            kur = GUNCEL_KURLAR.get(alim.para_birimi, 1.0)
+            borc_toplam += (alim.tutar * kur)
+            
+        # Ödemeler (Yapıldığı günkü değerinden - Veritabanındaki kayıtlı kur)
+        for odeme in t.odenenler:
+            odeme_toplam += (odeme.tutar * odeme.kur_degeri)
+            
+        # Tedarikçi nesnesine geçici olarak bakiye bilgisini yapıştırıyoruz
+        t.guncel_bakiye = borc_toplam - odeme_toplam
+        
+    # 3. SIRALAMA YAP: En çok borcumuz olan en üstte (Büyükten küçüğe)
+    # reverse=True demek, Büyükten küçüğe sırala demektir.
+    tedarikciler.sort(key=lambda x: x.guncel_bakiye, reverse=True)
+    
+    return render_template('ticari_borclar.html', 
+                           tedarikciler=tedarikciler, 
+                           arama_var=bool(arama_terimi), 
+                           terim=arama_terimi)
 
+@app.route('/tedarikci_ekle', methods=['POST'])
+def tedarikci_ekle():
+    if 'logged_in' not in session: return redirect(url_for('index'))
+    db.session.add(Tedarikci(
+        firma_adi=request.form.get('firma_adi'),
+        yetkili_kisi=request.form.get('yetkili_kisi'),
+        telefon=request.form.get('telefon'),
+        adres=request.form.get('adres'),
+        durum='Aktif'
+    ))
+    db.session.commit()
+    return redirect(url_for('ticari_borclar'))
+
+@app.route('/tedarikci/<int:id>')
+def tedarikci_detay(id):
+    if 'logged_in' not in session: return redirect(url_for('index'))
+    tedarikci = Tedarikci.query.get_or_404(id)
+    
+    toplam_borc_tl = 0
+    toplam_odenen_tl = 0
+    
+    # 1. Malzeme Alımları (Borçlanma)
+    for alim in tedarikci.satin_almalar:
+        kur = GUNCEL_KURLAR.get(alim.para_birimi, 1.0)
+        toplam_borc_tl += (alim.tutar * kur)
+        
+    # 2. Tedarikçiye Yapılan Ödemeler (Borç Düşme)
+    for odeme in tedarikci.odenenler:
+        # Ödeme anındaki kur (veritabanında kayıtlı olan)
+        toplam_odenen_tl += (odeme.tutar * odeme.kur_degeri)
+        
+    net_borc_tl = round(toplam_borc_tl - toplam_odenen_tl, 2)
+    net_borc_usd = round(net_borc_tl / GUNCEL_KURLAR.get('USD', 1.0), 2)
+    
+    return render_template('tedarikci_detay.html', 
+                           tedarikci=tedarikci, 
+                           toplam_tl=net_borc_tl, 
+                           toplam_usd=net_borc_usd,
+                           kurlar=GUNCEL_KURLAR)
+
+@app.route('/malzeme_alim_ekle', methods=['POST'])
+def malzeme_alim_ekle():
+    if 'logged_in' not in session: return redirect(url_for('index'))
+    t_id = int(request.form.get('tedarikci_id'))
+    
+    yeni_alim = SatinAlma(
+        malzeme_tanimi=request.form.get('malzeme_tanimi'),
+        tutar=float(request.form.get('tutar') or 0),
+        para_birimi=request.form.get('para_birimi'),
+        fatura_no=request.form.get('fatura_no'),
+        tarih=datetime.now(),
+        tedarikci_id=t_id
+    )
+    db.session.add(yeni_alim)
+    db.session.commit()
+    return redirect(url_for('tedarikci_detay', id=t_id))
+
+@app.route('/tedarikci_odeme_yap', methods=['POST'])
+def tedarikci_odeme_yap():
+    if 'logged_in' not in session: return redirect(url_for('index'))
+    t_id = int(request.form.get('tedarikci_id'))
+    birim = request.form.get('birim')
+    
+    # İşlem anındaki kur
+    islem_kuru = GUNCEL_KURLAR.get(birim, 1.0) if birim != 'TL' else 1.0
+    
+    yeni_odeme = TedarikciOdeme(
+        tutar=float(request.form.get('tutar') or 0),
+        birim=birim,
+        aciklama=request.form.get('aciklama'),
+        kur_degeri=islem_kuru,
+        tedarikci_id=t_id
+    )
+    db.session.add(yeni_odeme)
+    db.session.commit()
+    return redirect(url_for('tedarikci_detay', id=t_id))
+
+@app.route('/alim_sil/<int:id>')
+def alim_sil(id):
+    if 'logged_in' not in session: return redirect(url_for('index'))
+    kayit = SatinAlma.query.get_or_404(id)
+    t_id = kayit.tedarikci_id
+    db.session.delete(kayit)
+    db.session.commit()
+    return redirect(url_for('tedarikci_detay', id=t_id))
+
+@app.route('/tedarikci_odeme_sil/<int:id>')
+def tedarikci_odeme_sil(id):
+    if 'logged_in' not in session: return redirect(url_for('index'))
+    kayit = TedarikciOdeme.query.get_or_404(id)
+    t_id = kayit.tedarikci_id
+    db.session.delete(kayit)
+    db.session.commit()
+    return redirect(url_for('tedarikci_detay', id=t_id))
+
+# --- GİDERLER MODÜLÜ (GÜNCELLENDİ) ---
 @app.route('/giderler')
 def giderler():
     if 'logged_in' not in session: return redirect(url_for('index'))
-    return render_template('base.html', content="<div class='alert alert-info m-5 text-center'><h3>Giderler Modülü</h3><p>Yapım Aşamasında...</p><a href='/' class='btn btn-primary'>Ana Ekrana Dön</a></div>")
+    
+    # Tüm giderleri tarihe göre tersten sırala (En yeni en üstte)
+    tum_giderler = Gider.query.order_by(Gider.tarih.desc()).all()
+    
+    # Bu ayki toplam gideri hesapla (Sayfa üstünde göstermek için)
+    bugun = datetime.now()
+    bu_ay_toplam = 0
+    for g in tum_giderler:
+        if g.tarih.month == bugun.month and g.tarih.year == bugun.year:
+            bu_ay_toplam += (g.tutar * g.kur_degeri)
+            
+    return render_template('giderler.html', 
+                           giderler=tum_giderler, 
+                           bu_ay_toplam=bu_ay_toplam,
+                           kurlar=GUNCEL_KURLAR)
 
+@app.route('/gider_ekle', methods=['POST'])
+def gider_ekle():
+    if 'logged_in' not in session: return redirect(url_for('index'))
+    
+    birim = request.form.get('birim')
+    islem_kuru = GUNCEL_KURLAR.get(birim, 1.0) if birim != 'TL' else 1.0
+    
+    yeni_gider = Gider(
+        kategori=request.form.get('kategori'),
+        aciklama=request.form.get('aciklama'),
+        tutar=float(request.form.get('tutar') or 0),
+        birim=birim,
+        kur_degeri=islem_kuru,
+        tarih=datetime.now()
+    )
+    db.session.add(yeni_gider)
+    db.session.commit()
+    return redirect(url_for('giderler'))
 
-# --- LOGIN & SİSTEM ---
+@app.route('/gider_sil/<int:id>')
+def gider_sil(id):
+    if 'logged_in' not in session: return redirect(url_for('index'))
+    gider = Gider.query.get_or_404(id)
+    db.session.delete(gider)
+    db.session.commit()
+    return redirect(url_for('giderler'))
+
+# --- LOGIN & SİSTEM FONKSİYONLARI ---
+
 @app.route('/kurlari_guncelle')
 def kurlari_guncelle():
     kurlari_sabitle()
@@ -252,7 +426,7 @@ def logout():
     session.pop('logged_in', None)
     return redirect(url_for('index'))
 
-# --- MÜŞTERİ İŞLEMLERİ (Aynen Korundu) ---
+# --- MÜŞTERİ İŞLEMLERİ ---
 @app.route('/musteriler')
 def musteriler():
     if 'logged_in' not in session: return redirect(url_for('index'))
@@ -288,8 +462,7 @@ def musteri_ekle():
         durum='Aktif'
     ))
     db.session.commit()
-    # İşlem bitince Satışlar sayfasına dön
-    return redirect(url_for('satislar'))
+    return redirect(request.referrer or url_for('musteriler'))
 
 @app.route('/musteri_duzenle/<int:id>', methods=['GET', 'POST'])
 def musteri_duzenle(id):
@@ -316,7 +489,7 @@ def musteri_sil(id):
         db.session.commit()
     return redirect(url_for('musteriler'))
 
-# --- İŞ VE ÖDEME İŞLEMLERİ (Aynen Korundu) ---
+# --- İŞ VE ÖDEME İŞLEMLERİ ---
 @app.route('/is_ekle')
 def is_ekle():
     if 'logged_in' not in session: return redirect(url_for('index'))
@@ -353,7 +526,7 @@ def is_kaydet():
         db.session.add(yeni_odeme)
     
     db.session.commit()
-    return redirect(url_for('satislar')) # Yönlendirme güncellendi
+    return redirect(url_for('satislar'))
 
 @app.route('/is_teslim_et/<int:id>')
 def is_teslim_et(id):
@@ -427,7 +600,13 @@ def pdf_indir(id):
     net_usd = net_tl / GUNCEL_KURLAR.get('USD', 1.0)
 
     logo_path = os.path.join(app.root_path, 'static', 'logo.png')
-    rendered = render_template('pdf_sablonu.html', musteri=musteri, toplam_tl=round(net_tl, 2), toplam_usd=round(net_usd, 2), bugun=datetime.now().strftime('%d.%m.%Y'), logo_url=logo_path)
+
+    rendered = render_template('pdf_sablonu.html', 
+                               musteri=musteri, 
+                               toplam_tl=round(net_tl, 2), 
+                               toplam_usd=round(net_usd, 2),
+                               bugun=datetime.now().strftime('%d.%m.%Y'),
+                               logo_url=logo_path)
 
     if platform.system() == "Windows":
         path_wkhtmltopdf = r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
@@ -445,118 +624,38 @@ def pdf_indir(id):
     response.headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{safe_filename}"
     return response
 
-@app.route('/ticari_borclar')
-def ticari_borclar():
-    if 'logged_in' not in session: return redirect(url_for('index'))
-    
-    # Arama var mı?
-    arama_terimi = request.args.get('q')
-    if arama_terimi:
-        bulunanlar = Tedarikci.query.filter(
-            Tedarikci.durum == 'Aktif',
-            or_(
-                Tedarikci.firma_adi.contains(arama_terimi),
-                Tedarikci.yetkili_kisi.contains(arama_terimi)
-            )
-        ).all()
-        return render_template('ticari_borclar.html', tedarikciler=bulunanlar, arama_var=True, terim=arama_terimi)
-    
-    return render_template('ticari_borclar.html', tedarikciler=Tedarikci.query.filter_by(durum='Aktif').all(), arama_var=False)
+# --- TEDARİKÇİ DÜZENLEME VE SİLME ROTALARI ---
 
-@app.route('/tedarikci_ekle', methods=['POST'])
-def tedarikci_ekle():
+@app.route('/tedarikci_duzenle/<int:id>', methods=['GET', 'POST'])
+def tedarikci_duzenle(id):
     if 'logged_in' not in session: return redirect(url_for('index'))
-    db.session.add(Tedarikci(
-        firma_adi=request.form.get('firma_adi'),
-        yetkili_kisi=request.form.get('yetkili_kisi'),
-        telefon=request.form.get('telefon'),
-        adres=request.form.get('adres'),
-        durum='Aktif'
-    ))
-    db.session.commit()
-    return redirect(url_for('ticari_borclar'))
+    tedarikci = Tedarikci.query.get_or_404(id)
 
-@app.route('/tedarikci/<int:id>')
-def tedarikci_detay(id):
+    if request.method == 'POST':
+        tedarikci.firma_adi = request.form.get('firma_adi')
+        tedarikci.yetkili_kisi = request.form.get('yetkili_kisi')
+        tedarikci.telefon = request.form.get('telefon')
+        tedarikci.adres = request.form.get('adres')
+        db.session.commit()
+        return redirect(url_for('ticari_borclar'))
+    
+    return render_template('tedarikci_duzenle.html', tedarikci=tedarikci)
+
+@app.route('/tedarikci_sil/<int:id>')
+def tedarikci_sil(id):
     if 'logged_in' not in session: return redirect(url_for('index'))
     tedarikci = Tedarikci.query.get_or_404(id)
     
-    toplam_borc_tl = 0
-    toplam_odenen_tl = 0
-    
-    # 1. Malzeme Alımları (Borçlanma)
-    for alim in tedarikci.satin_almalar:
-        kur = GUNCEL_KURLAR.get(alim.para_birimi, 1.0)
-        toplam_borc_tl += (alim.tutar * kur)
+    # KONTROL: Eğer tedarikçinin geçmişte alım veya ödeme kaydı varsa SİLME, PASİFE AL.
+    if tedarikci.satin_almalar or tedarikci.odenenler:
+        tedarikci.durum = 'Pasif'
+        db.session.commit()
+    else:
+        # Hiçbir işlem yapılmamışsa veritabanından tamamen sil
+        db.session.delete(tedarikci)
+        db.session.commit()
         
-    # 2. Tedarikçiye Yapılan Ödemeler (Borç Düşme)
-    for odeme in tedarikci.odenenler:
-        # Ödeme anındaki kur (veritabanında kayıtlı olan)
-        toplam_odenen_tl += (odeme.tutar * odeme.kur_degeri)
-        
-    net_borc_tl = round(toplam_borc_tl - toplam_odenen_tl, 2)
-    net_borc_usd = round(net_borc_tl / GUNCEL_KURLAR.get('USD', 1.0), 2)
-    
-    return render_template('tedarikci_detay.html', 
-                           tedarikci=tedarikci, 
-                           toplam_tl=net_borc_tl, 
-                           toplam_usd=net_borc_usd,
-                           kurlar=GUNCEL_KURLAR)
-
-@app.route('/malzeme_alim_ekle', methods=['POST'])
-def malzeme_alim_ekle():
-    if 'logged_in' not in session: return redirect(url_for('index'))
-    t_id = int(request.form.get('tedarikci_id'))
-    
-    yeni_alim = SatinAlma(
-        malzeme_tanimi=request.form.get('malzeme_tanimi'),
-        tutar=float(request.form.get('tutar') or 0),
-        para_birimi=request.form.get('para_birimi'),
-        fatura_no=request.form.get('fatura_no'), # FATURA NO EKLENDİ
-        tarih=datetime.now(), # Otomatik şimdiki zaman
-        tedarikci_id=t_id
-    )
-    db.session.add(yeni_alim)
-    db.session.commit()
-    return redirect(url_for('tedarikci_detay', id=t_id))
-
-@app.route('/tedarikci_odeme_yap', methods=['POST'])
-def tedarikci_odeme_yap():
-    if 'logged_in' not in session: return redirect(url_for('index'))
-    t_id = int(request.form.get('tedarikci_id'))
-    birim = request.form.get('birim')
-    
-    # İşlem anındaki kur
-    islem_kuru = GUNCEL_KURLAR.get(birim, 1.0) if birim != 'TL' else 1.0
-    
-    yeni_odeme = TedarikciOdeme(
-        tutar=float(request.form.get('tutar') or 0),
-        birim=birim,
-        aciklama=request.form.get('aciklama'),
-        kur_degeri=islem_kuru,
-        tedarikci_id=t_id
-    )
-    db.session.add(yeni_odeme)
-    db.session.commit()
-    return redirect(url_for('tedarikci_detay', id=t_id))
-
-@app.route('/alim_sil/<int:id>')
-def alim_sil(id):
-    if 'logged_in' not in session: return redirect(url_for('index'))
-    kayit = SatinAlma.query.get_or_404(id)
-    t_id = kayit.tedarikci_id
-    db.session.delete(kayit)
-    db.session.commit()
-    return redirect(url_for('tedarikci_detay', id=t_id))
-
-@app.route('/tedarikci_odeme_sil/<int:id>')
-def tedarikci_odeme_sil(id):
-    if 'logged_in' not in session: return redirect(url_for('index'))
-    kayit = TedarikciOdeme.query.get_or_404(id)
-    t_id = kayit.tedarikci_id
-    db.session.delete(kayit)
-    db.session.commit()
-    return redirect(url_for('tedarikci_detay', id=t_id))
+    return redirect(url_for('ticari_borclar'))
 
 if __name__ == '__main__':
     with app.app_context():
