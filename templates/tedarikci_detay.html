@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row g-4 mb-4">
+    <div class="col-md-7">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-2">
+                <li class="breadcrumb-item small"><a href="/ticari_borclar" class="text-decoration-none text-danger">Tedarikçiler</a></li>
+                <li class="breadcrumb-item small active">{{ tedarikci.firma_adi }}</li>
+            </ol>
+        </nav>
+        <h2 class="mb-1 fw-bold text-danger">{{ tedarikci.firma_adi }}</h2>
+        <p class="text-muted small mb-0"><i class="bi bi-person me-2"></i>{{ tedarikci.yetkili_kisi or '-' }}</p>
+        <p class="text-muted small mt-1"><i class="bi bi-telephone me-2"></i>{{ tedarikci.telefon or '-' }}</p>
+    </div>
+    
+    <div class="col-md-5 text-md-end align-self-end">
+        <button class="btn btn-danger btn-sm rounded-pill px-4 py-2 me-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#malzemeAlimModal">
+            <i class="bi bi-cart-plus me-2"></i>MALZEME AL
+        </button>
+        <button class="btn btn-outline-dark btn-sm rounded-pill px-4 py-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#odemeYapModal">
+            <i class="bi bi-wallet2 me-2"></i>ÖDEME YAP
+        </button>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="card card-custom text-center border-0 shadow-sm" style="background: #fff5f5; border-left: 5px solid #dc3545 !important;">
+            <div class="text-uppercase small fw-medium text-muted mb-1">GÜNCEL BORÇ DURUMU</div>
+            <div class="h2 mb-0 text-danger">{{ "{:,.2f}".format(toplam_tl) }} ₺</div>
+            <div class="small text-secondary">{{ "{:,.2f}".format(toplam_usd) }} USD</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="d-flex justify-content-between align-items-center mb-3 px-2">
+            <h5 class="mb-0 small fw-bold text-uppercase text-danger">Malzeme Alım Geçmişi</h5>
+        </div>
+        <div class="card card-custom p-0 overflow-hidden border-0 shadow-sm">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr class="bg-light">
+                        <th class="ps-4">Malzeme / Fatura</th>
+                        <th class="text-end pe-4">Tutar</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for alim in tedarikci.satin_almalar %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="fw-medium text-dark">{{ alim.malzeme_tanimi }}</div>
+                            <div class="small text-muted">
+                                <span class="me-2"><i class="bi bi-receipt me-1"></i>Fat: {{ alim.fatura_no or 'YOK' }}</span>
+                                <span>{{ alim.tarih.strftime('%d.%m.%Y') }}</span>
+                            </div>
+                        </td>
+                        <td class="text-end pe-4">
+                            <span class="fw-medium me-3 text-danger">- {{ "{:,.2f}".format(alim.tutar) }} {{ alim.para_birimi }}</span>
+                            <a href="/alim_sil/{{ alim.id }}" onclick="return confirm('Bu alım kaydını silmek istediğinize emin misiniz?');" class="text-muted small"><i class="bi bi-trash"></i></a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not tedarikci.satin_almalar %}
+                    <tr><td colspan="2" class="text-center py-4 text-muted small">Kayıtlı alım yok.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="d-flex justify-content-between align-items-center mb-3 px-2">
+            <h5 class="mb-0 small fw-bold text-uppercase text-success">Yapılan Ödemeler</h5>
+        </div>
+        <div class="card card-custom p-0 overflow-hidden border-0 shadow-sm">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr class="bg-light">
+                        <th class="ps-4">Açıklama</th>
+                        <th class="text-end pe-4">Tutar</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for o in tedarikci.odenenler %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="fw-medium text-dark small">{{ o.aciklama }}</div>
+                            <div style="font-size: 0.7rem;" class="text-muted">{{ o.odeme_tarihi.strftime('%d.%m.%Y') }}</div>
+                        </td>
+                        <td class="text-end pe-4">
+                            <span class="text-success small fw-medium me-3">+ {{ "{:,.2f}".format(o.tutar) }} {{ o.birim }}</span>
+                            <a href="/tedarikci_odeme_sil/{{ o.id }}" onclick="return confirm('Silmek istediğinize emin misiniz?');" class="text-muted small"><i class="bi bi-trash"></i></a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not tedarikci.odenenler %}
+                    <tr><td colspan="2" class="text-center py-4 text-muted small">Ödeme kaydı yok.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="malzemeAlimModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow" style="border-radius: 20px;">
+            <div class="modal-body p-4">
+                <h6 class="fw-bold mb-4 text-center text-danger">Malzeme Alışı Gir (Borçlan)</h6>
+                <form action="/malzeme_alim_ekle" method="POST">
+                    <input type="hidden" name="tedarikci_id" value="{{ tedarikci.id }}">
+                    <div class="mb-3">
+                        <label class="form-label small">MALZEME / İŞ TANIMI</label>
+                        <input type="text" name="malzeme_tanimi" class="form-control bg-light border-0 p-3" required placeholder="Örn: 10 Tabaka Pleksi">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">FATURA NUMARASI</label>
+                        <input type="text" name="fatura_no" class="form-control bg-light border-0 p-3" placeholder="Fatura üzerindeki no">
+                    </div>
+                    <div class="row">
+                        <div class="col-8 mb-3">
+                            <label class="form-label small">TUTAR</label>
+                            <input type="number" step="0.01" name="tutar" class="form-control bg-light border-0 p-3" required>
+                        </div>
+                        <div class="col-4 mb-3">
+                            <label class="form-label small">BİRİM</label>
+                            <select name="para_birimi" class="form-select bg-light border-0 p-3">
+                                <option value="TL">TL</option>
+                                <option value="USD">USD</option>
+                                <option value="EUR">EUR</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-danger w-100 py-3">KAYDET</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="odemeYapModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow" style="border-radius: 20px;">
+            <div class="modal-body p-4">
+                <h6 class="fw-bold mb-4 text-center text-success">Tedarikçiye Ödeme Yap (Borç Düş)</h6>
+                <form action="/tedarikci_odeme_yap" method="POST">
+                    <input type="hidden" name="tedarikci_id" value="{{ tedarikci.id }}">
+                    <div class="mb-3">
+                        <label class="form-label small">ÖDENEN TUTAR</label>
+                        <input type="number" step="0.01" name="tutar" class="form-control bg-light border-0 p-3" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">PARA BİRİMİ</label>
+                        <select name="birim" class="form-select bg-light border-0">
+                            <option value="TL">TL</option>
+                            <option value="USD">USD</option>
+                            <option value="EUR">EUR</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">AÇIKLAMA / NOT</label>
+                        <input type="text" name="aciklama" class="form-control bg-light border-0 p-3" placeholder="Örn: Havale ile ödendi">
+                    </div>
+                    <button type="submit" class="btn btn-success w-100 py-3">ÖDEMEYİ KAYDET</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

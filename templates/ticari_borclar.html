@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Ticari Borçlar - YVR{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="/" class="btn btn-outline-secondary btn-sm rounded-pill px-3"><i class="bi bi-arrow-left me-2"></i>Ana Ekrana Dön</a>
+</div>
+
+<div class="row mb-4 align-items-center">
+    <div class="col-md-5">
+        <h3 class="mb-1 text-danger">Tedarikçi Yönetimi</h3>
+        <p class="text-muted small mb-0">Malzeme aldığınız firmalar ve borç takibi.</p>
+    </div>
+    
+    <div class="col-md-4 mt-3 mt-md-0">
+        <form action="/ticari_borclar" method="GET" class="d-flex shadow-sm rounded-pill overflow-hidden border">
+            <input type="text" name="q" class="form-control border-0 ps-4" placeholder="Firma Ara..." value="{{ terim or '' }}">
+            {% if arama_var %}
+            <a href="/ticari_borclar" class="btn btn-white border-0 text-danger bg-white d-flex align-items-center"><i class="bi bi-x-lg"></i></a>
+            {% endif %}
+            <button type="submit" class="btn btn-white border-0 text-danger bg-white px-3"><i class="bi bi-search"></i></button>
+        </form>
+    </div>
+
+    <div class="col-md-3 mt-3 mt-md-0 text-md-end">
+        <button class="btn btn-danger shadow-sm" data-bs-toggle="modal" data-bs-target="#tedarikciEkleModal">
+            <i class="bi bi-plus-lg me-2"></i>TEDARİKÇİ EKLE
+        </button>
+    </div>
+</div>
+
+<div class="card card-custom p-0 overflow-hidden shadow-sm border-0">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead style="background-color: #fdf2f2;"> <tr>
+                    <th class="ps-4">Firma Adı / Yetkili</th>
+                    <th>İletişim</th>
+                    <th class="text-end pe-4">İşlem</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in tedarikciler %}
+                <tr>
+                    <td class="ps-4">
+                        <div class="fw-bold text-dark">{{ t.firma_adi }}</div>
+                        <div class="small text-muted">{{ t.yetkili_kisi or '-' }}</div>
+                    </td>
+                    <td>
+                        <div class="small text-muted"><i class="bi bi-telephone me-2"></i>{{ t.telefon or '-' }}</div>
+                    </td>
+                    <td class="text-end pe-4">
+                        <a href="/tedarikci/{{ t.id }}" class="btn btn-sm btn-outline-danger fw-bold rounded-pill px-4 shadow-sm">
+                            DETAY & BORÇ
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not tedarikciler %}
+                <tr>
+                    <td colspan="3" class="text-center py-5 text-muted small">Kayıtlı tedarikçi bulunmamaktadır.</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="tedarikciEkleModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow" style="border-radius: 25px;">
+            <div class="modal-body p-5">
+                <h5 class="fw-bold mb-4 text-danger">Yeni Tedarikçi Ekle</h5>
+                <form action="/tedarikci_ekle" method="POST">
+                    <div class="mb-3">
+                        <label class="form-label small fw-medium">FİRMA ADI</label>
+                        <input type="text" name="firma_adi" class="form-control border-0 bg-light p-3" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-medium">YETKİLİ KİŞİ</label>
+                        <input type="text" name="yetkili_kisi" class="form-control border-0 bg-light p-3">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-medium">TELEFON</label>
+                        <input type="text" name="telefon" class="form-control border-0 bg-light p-3">
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label small fw-medium">ADRES</label>
+                        <textarea name="adres" class="form-control border-0 bg-light p-3" rows="2"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-danger w-100 py-3 shadow">KAYDET</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
