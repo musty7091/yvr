@@ -29,7 +29,7 @@
             <i class="bi bi-archive"></i>
         </a>
         <button class="btn btn-yvr-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#musteriEkleModal">
-            <i class="bi bi-person-plus me-2"></i>EKLE
+            <i class="bi bi-person-plus me-2"></i>MÜŞTERİ EKLE
         </button>
     </div>
 </div>
@@ -57,6 +57,10 @@
                         <div class="small text-muted"><i class="bi bi-telephone me-2"></i>{{ m.telefon or '-' }}</div>
                     </td>
                     <td class="text-end pe-4">
+                        <a href="/is_ekle?m_id={{ m.id }}" class="btn btn-sm btn-outline-primary fw-bold rounded-pill px-3 me-2 shadow-sm" title="Bu Müşteriye İş Ekle">
+                            <i class="bi bi-plus-lg me-1"></i>İŞ EKLE
+                        </a>
+
                         <a href="/musteri/{{ m.id }}" class="btn btn-sm btn-yvr-primary fw-bold rounded-pill px-4 me-2 shadow-sm" title="Müşteri Detayına Git">
                             DETAY
                         </a>

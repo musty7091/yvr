@@ -9,7 +9,9 @@
                     <label class="form-label fw-bold small">Müşteri Seçin</label>
                     <select name="musteri_id" class="form-select border-light-subtle" required>
                         {% for m in musteriler %}
-                        <option value="{{ m.id }}">{{ m.ad_soyad }}</option>
+                        <option value="{{ m.id }}" {% if secili_id and secili_id|int == m.id %}selected{% endif %}>
+                            {{ m.ad_soyad }}
+                        </option>
                         {% endfor %}
                     </select>
                 </div>

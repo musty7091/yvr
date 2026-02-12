@@ -493,7 +493,13 @@ def musteri_sil(id):
 @app.route('/is_ekle')
 def is_ekle():
     if 'logged_in' not in session: return redirect(url_for('index'))
-    return render_template('is_ekle.html', musteriler=Musteri.query.filter_by(durum='Aktif').all())
+    
+    # URL'den gelen "m_id" değerini yakala (Örn: /is_ekle?m_id=5)
+    secili_id = request.args.get('m_id')
+    
+    return render_template('is_ekle.html', 
+                           musteriler=Musteri.query.filter_by(durum='Aktif').all(),
+                           secili_id=secili_id) # Bu bilgiyi sayfaya gönder
 
 @app.route('/is_kaydet', methods=['POST'])
 def is_kaydet():
