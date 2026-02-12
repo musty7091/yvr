@@ -6,6 +6,8 @@ from sqlalchemy import or_
 from datetime import datetime, timedelta
 import pdfkit
 import os
+import platform  # YENİ: İşletim sistemi tespiti için
+from urllib.parse import quote  # YENİ: Türkçe dosya ismi hatasını çözmek için
 
 app = Flask(__name__)
 app.secret_key = 'yvr_ozel_sifre_123'
@@ -79,7 +81,6 @@ def index():
     if 'logged_in' not in session:
         return render_template('giris.html')
     
-    # 1. TEMEL VERİLERİ HESAPLA
     aktif_musteriler = Musteri.query.filter_by(durum='Aktif').all()
     
     toplam_alacak_tl = 0
@@ -96,26 +97,19 @@ def index():
             kur = GUNCEL_KURLAR.get(o.birim, 1.0)
             toplam_alacak_tl -= (o.tutar * kur)
 
-    # 2. YENİ İSTATİSTİKLER (Kartlar İçin)
-    # A) Müşteri Sayıları
     toplam_musteri = Musteri.query.count()
     aktif_musteri_sayisi = len(aktif_musteriler)
-    
-    # B) Tamamlanan İşler
     biten_isler = IsKaydi.query.filter_by(durum='Teslim Edildi').count()
     
-    # C) Bu Ayki Ciro (Kasa Girişi)
     simdi = datetime.now()
     tum_odemeler = Odeme.query.all()
     bu_ayki_ciro = 0
     
     for o in tum_odemeler:
-        # Sadece bu ay ve bu yıl yapılan ödemeleri topla
         if o.odeme_tarihi.month == simdi.month and o.odeme_tarihi.year == simdi.year:
             kur = GUNCEL_KURLAR.get(o.birim, 1.0)
             bu_ayki_ciro += (o.tutar * kur)
 
-    # 3. YAKLAŞAN İŞLER LİSTESİ
     tum_yaklasan = IsKaydi.query.filter(
         IsKaydi.teslim_tarihi != "", 
         IsKaydi.durum == 'Devam Ediyor'
@@ -128,7 +122,6 @@ def index():
                            is_sayisi=devam_eden_is_sayisi, 
                            yaklasan_isler=yaklasan_isler,
                            kurlar=GUNCEL_KURLAR,
-                           # Yeni Değişkenler:
                            t_musteri=toplam_musteri,
                            a_musteri=aktif_musteri_sayisi,
                            biten_is=biten_isler,
@@ -353,8 +346,14 @@ def pdf_indir(id):
                                bugun=datetime.now().strftime('%d.%m.%Y'),
                                logo_url=logo_path)
 
-    path_wkhtmltopdf = r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
-    config = pdfkit.configuration(wkhtmltopdf=path_wkhtmltopdf)
+    # --- DÜZELTME 1: OTOMATİK PDF YOLU (Windows / Linux) ---
+    if platform.system() == "Windows":
+        # Senin bilgisayarındaki yol
+        path_wkhtmltopdf = r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
+        config = pdfkit.configuration(wkhtmltopdf=path_wkhtmltopdf)
+    else:
+        # PythonAnywhere veya Linux Sunucu yolu
+        config = pdfkit.configuration(wkhtmltopdf='/usr/bin/wkhtmltopdf')
     
     options = {
         'encoding': "UTF-8", 
@@ -366,7 +365,15 @@ def pdf_indir(id):
     
     response = make_response(pdf)
     response.headers['Content-Type'] = 'application/pdf'
-    response.headers['Content-Disposition'] = f'attachment; filename={musteri.ad_soyad}_ekstre.pdf'
+    
+    # --- DÜZELTME 2: TÜRKÇE DOSYA ADI HATASI ÇÖZÜMÜ ---
+    filename = f"{musteri.ad_soyad}_ekstre.pdf"
+    # Dosya ismini URL uyumlu hale getir (boşlukları %20 yapar, Türkçe karakterleri kodlar)
+    safe_filename = quote(filename)
+    
+    # Modern tarayıcılar için UTF-8 destekli başlık formatı
+    response.headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{safe_filename}"
+    
     return response
 
 if __name__ == '__main__':
