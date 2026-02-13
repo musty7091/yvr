@@ -2,97 +2,136 @@
 {% block title %}Kasa & Banka Yönetimi{% endblock %}
 
 {% block content %}
-<div class="row mb-4 align-items-center">
-    <div class="col-md-7">
-        <h3 class="fw-bold text-dark">Kasa & Banka Yönetimi</h3>
-        <p class="text-muted small">Ödemelerin girdiği ve çıktığı tüm hesapları buradan yönetin.</p>
+<div class="container-fluid py-4">
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-6">
+            <h3 class="fw-bold text-dark mb-1">Kasa & Banka Yönetimi</h3>
+            <p class="text-muted small">Hesaplar arası transfer (virman) ve bakiye takibi.</p>
+        </div>
+        <div class="col-md-6 text-md-end">
+            <button class="btn btn-outline-primary shadow-sm rounded-pill px-4 fw-bold me-2" data-bs-toggle="modal" data-bs-target="#transferModal">
+                <i class="bi bi-arrow-left-right me-2"></i> TRANSFER / VİRMAN
+            </button>
+            <button class="btn btn-primary shadow-sm rounded-pill px-4 fw-bold" data-bs-toggle="modal" data-bs-target="#kasaEkleModal">
+                <i class="bi bi-plus-lg me-2"></i> YENİ HESAP EKLE
+            </button>
+        </div>
     </div>
-    <div class="col-md-5 text-md-end">
-        <button class="btn btn-primary shadow-sm rounded-pill px-4 fw-bold" data-bs-toggle="modal" data-bs-target="#kasaEkleModal">
-            <i class="bi bi-plus-lg me-2"></i> YENİ HESAP / KASA EKLE
-        </button>
-    </div>
-</div>
 
-<div class="card card-custom p-0 overflow-hidden shadow-sm border-0">
-    <table class="table table-hover align-middle mb-0">
-        <thead class="bg-light">
-            <tr class="small text-uppercase text-muted">
-                <th class="ps-4">Hesap / Kasa Adı</th>
-                <th>Tür</th>
-                <th>Hesap No / Bilgi</th>
-                <th class="text-end pe-4">İşlem</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for k in kasalar %}
-            <tr>
-                <td class="ps-4">
-                    <div class="d-flex align-items-center">
-                        <div class="rounded-circle bg-light p-2 me-3">
-                            <i class="bi bi-bank text-primary"></i>
-                        </div>
-                        <span class="fw-bold text-dark">{{ k.ad }}</span>
+    <div class="row g-3 mb-5">
+        {% for k in kasalar %}
+        <div class="col-md-3 col-6">
+            <div class="card card-custom p-4 border-0 shadow-sm h-100" style="border-radius: 20px;">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div class="rounded-circle bg-light p-3">
+                        <i class="bi {% if k.tur == 'Banka' %}bi-bank text-primary{% elif k.tur == 'POS' %}bi-credit-card text-warning{% else %}bi-cash-stack text-success{% endif %} fs-4"></i>
                     </div>
-                </td>
-                <td>
-                    {% if k.tur == 'Banka' %}
-                        <span class="badge bg-info text-dark opacity-75">Banka Hesabı</span>
-                    {% elif k.tur == 'POS' %}
-                        <span class="badge bg-warning text-dark opacity-75">POS Cihazı</span>
-                    {% else %}
-                        <span class="badge bg-secondary opacity-75">Nakit Kasa</span>
-                    {% endif %}
-                </td>
-                <td class="text-muted small">{{ k.hesap_no or 'Bilgi Girilmemiş' }}</td>
-                <td class="text-end pe-4">
-                    <a href="{{ url_for('genel.kasa_banka_sil', id=k.id) }}" 
-                       onclick="return confirm('Bu hesabı silmek istediğinize emin misiniz?');" 
-                       class="btn btn-sm btn-outline-danger border-0">
-                        <i class="bi bi-trash3"></i>
-                    </a>
-                </td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="4" class="text-center p-5 text-muted">
-                    <i class="bi bi-info-circle me-1"></i> Henüz tanımlanmış bir banka veya kasa bulunmuyor.
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+                    <span class="badge rounded-pill bg-light text-muted border px-2 py-1 small">{{ k.tur }}</span>
+                </div>
+                <div class="mt-3">
+                    <div class="text-muted small fw-bold mb-1 text-uppercase">{{ k.ad }}</div>
+                    <div class="h3 fw-bold mb-0 {% if k.bakiye < 0 %}text-danger{% else %}text-dark{% endif %}">
+                        {{ "{:,.2f}".format(k.bakiye) }} ₺
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="card card-custom border-0 shadow-sm overflow-hidden" style="border-radius: 20px;">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="bg-light text-center small text-uppercase text-muted">
+                <tr>
+                    <th class="ps-4 text-start">Hesap Adı</th>
+                    <th>Tür</th>
+                    <th>Hesap Detayı</th>
+                    <th class="text-end pe-4">İşlem</th>
+                </tr>
+            </thead>
+            <tbody class="text-center">
+                {% for k in kasalar %}
+                <tr>
+                    <td class="ps-4 text-start fw-bold text-dark">{{ k.ad }}</td>
+                    <td><span class="badge bg-light text-dark border">{{ k.tur }}</span></td>
+                    <td class="text-muted small"><code>{{ k.hesap_no or 'Girilmedi' }}</code></td>
+                    <td class="text-end pe-4">
+                        <a href="{{ url_for('genel.kasa_banka_sil', id=k.id) }}" onclick="return confirm('Silmek istediğinize emin misiniz?');" class="btn btn-sm text-danger border-0">
+                            <i class="bi bi-trash3"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
-<div class="modal fade" id="kasaEkleModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="transferModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 20px;">
-            <form action="{{ url_for('genel.kasa_banka_ekle') }}" method="POST">
-                <div class="modal-header border-0 pb-0">
-                    <h5 class="fw-bold">Yeni Banka/Kasa Ekle</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 25px;">
+            <form action="{{ url_for('genel.transfer_yap') }}" method="POST">
+                <div class="modal-header border-0 pt-4 px-4">
+                    <h5 class="fw-bold">Para Transferi / Virman</h5>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body px-4">
+                    <div class="mb-3">
+                        <label class="small fw-bold text-muted mb-1">KAYNAK HESAP (Çıkan)</label>
+                        <select name="kaynak_hesap_id" class="form-select border-0 bg-light p-3" required>
+                            {% for k in kasalar %}<option value="{{ k.id }}">{{ k.ad }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="text-center my-2"><i class="bi bi-arrow-down-up fs-4 text-primary"></i></div>
+                    <div class="mb-3">
+                        <label class="small fw-bold text-muted mb-1">HEDEF HESAP (Giren)</label>
+                        <select name="hedef_hesap_id" class="form-select border-0 bg-light p-3" required>
+                            {% for k in kasalar %}<option value="{{ k.id }}">{{ k.ad }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="small fw-bold text-muted mb-1">TUTAR (₺)</label>
+                        <input type="number" step="0.01" name="tutar" class="form-control border-0 bg-light p-3" required placeholder="0.00">
+                    </div>
+                    <div class="mb-3">
+                        <label class="small fw-bold text-muted mb-1">AÇIKLAMA</label>
+                        <input type="text" name="aciklama" class="form-control border-0 bg-light p-3" placeholder="Örn: Bankadan nakit çekim">
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pb-4">
+                    <button type="submit" class="btn btn-primary rounded-pill w-100 fw-bold py-2">İŞLEMİ KAYDET</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="kasaEkleModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 25px;">
+            <form action="{{ url_for('genel.kasa_banka_ekle') }}" method="POST">
+                <div class="modal-header border-0 pt-4 px-4">
+                    <h5 class="fw-bold">Yeni Hesap Tanımla</h5>
+                </div>
+                <div class="modal-body px-4">
                     <div class="mb-3">
                         <label class="small fw-bold text-muted mb-1">HESAP ADI</label>
-                        <input type="text" name="ad" class="form-control border-0 bg-light" placeholder="Örn: Ziraat Bankası TL" required>
+                        <input type="text" name="ad" class="form-control border-0 bg-light p-3" required placeholder="Ziraat Bankası vb.">
                     </div>
                     <div class="mb-3">
                         <label class="small fw-bold text-muted mb-1">TÜRÜ</label>
-                        <select name="tur" class="form-select border-0 bg-light">
+                        <select name="tur" class="form-select border-0 bg-light p-3">
                             <option value="Banka">Banka Hesabı</option>
                             <option value="Kasa">Nakit Kasa</option>
                             <option value="POS">POS Cihazı</option>
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="small fw-bold text-muted mb-1">HESAP NO / IBAN (İsteğe Bağlı)</label>
-                        <input type="text" name="hesap_no" class="form-control border-0 bg-light" placeholder="TR00...">
+                        <label class="small fw-bold text-muted mb-1">HESAP NO / IBAN</label>
+                        <input type="text" name="hesap_no" class="form-control border-0 bg-light p-3">
                     </div>
                 </div>
-                <div class="modal-footer border-0 pt-0">
-                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Vazgeç</button>
-                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">KAYDET</button>
+                <div class="modal-footer border-0 pb-4">
+                    <button type="submit" class="btn btn-primary rounded-pill w-100 fw-bold py-2">HESABI KAYDET</button>
                 </div>
             </form>
         </div>

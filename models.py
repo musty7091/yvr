@@ -103,3 +103,18 @@ class Gider(db.Model):
     
     kur_degeri = db.Column(db.Float, default=1.0)
     tarih = db.Column(db.DateTime, default=datetime.now)
+
+class Transfer(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    tutar = db.Column(db.Float, nullable=False)
+    tarih = db.Column(db.DateTime, default=datetime.now)
+    aciklama = db.Column(db.String(200))
+    
+    # Paranın çıktığı hesap
+    kaynak_hesap_id = db.Column(db.Integer, db.ForeignKey('banka_kasa.id'), nullable=False)
+    # Paranın girdiği hesap
+    hedef_hesap_id = db.Column(db.Integer, db.ForeignKey('banka_kasa.id'), nullable=False)
+
+    # İlişkiler (Karışmaması için özel isimlerle)
+    kaynak = db.relationship('BankaKasa', foreign_keys=[kaynak_hesap_id])
+    hedef = db.relationship('BankaKasa', foreign_keys=[hedef_hesap_id])

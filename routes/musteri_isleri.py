@@ -65,6 +65,7 @@ def musteri_detay(id):
     if 'logged_in' not in session: 
         return redirect(url_for('genel.index'))
     m = Musteri.query.get_or_404(id)
+    # Kasa/Banka seçimi için aktif kasaları çekiyoruz
     kasalar = BankaKasa.query.filter_by(durum='Aktif').all()
     net_tl = sum(i.toplam_bedel * GUNCEL_KURLAR.get(i.para_birimi, 1.0) for i in m.isler) - sum(o.tutar * o.kur_degeri for o in m.odemeler)
     return render_template('musteri_detay.html', 
@@ -144,7 +145,7 @@ def is_kaydet():
     a_kapora = float(request.form.get('alinan_kapora') or 0)
     if a_kapora > 0:
         k_birimi = request.form.get('kapora_birimi')
-        # Kapora için varsayılan olarak ilk bulduğu kasayı veya nakit yöntemini atar
+        # Kapora için varsayılan olarak 'Nakit' yöntemi atanır
         db.session.add(Odeme(
             tutar=round(a_kapora, 2), 
             birim=k_birimi, 
@@ -189,6 +190,7 @@ def musteri_odeme_ekle(m_id):
     birim = request.form.get('birim')
     kur = GUNCEL_KURLAR.get(birim, 1.0) if birim != 'TL' else 1.0
     
+    # Yeni Banka/Kasa ve Yöntem mimarisine uygun kayıt
     yeni_odeme = Odeme(
         tutar=round(float(request.form.get('tutar') or 0), 2), 
         birim=birim, 
