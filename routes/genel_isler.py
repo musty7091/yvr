@@ -22,17 +22,24 @@ def index():
     }
     guncel_ay = aylar_tr[bu_ay]    
 
-    # Aylık İş Hacmi Hesaplama
+    # 1. Alınan İş Hacmi Hesaplama
     aylik_is_hacmi = sum((i.toplam_bedel * GUNCEL_KURLAR.get(i.para_birimi, 1.0)) for i in IsKaydi.query.filter(extract('month', IsKaydi.kayit_tarihi) == bu_ay, extract('year', IsKaydi.kayit_tarihi) == bu_yil).all())
     
-    # Aylık Satın Alma (Hammadde) Hesaplama
+    # 2. Ticari Alımlar (Hammadde) Hesaplama
     aylik_satinalma = sum((s.tutar * GUNCEL_KURLAR.get(s.para_birimi, 1.0)) for s in SatinAlma.query.filter(extract('month', SatinAlma.tarih) == bu_ay, extract('year', SatinAlma.tarih) == bu_yil).all())
     
-    # Aylık İşletme Giderleri Hesaplama
+    # 3. İşletme Giderleri Hesaplama
     aylik_gider = sum((g.tutar * g.kur_degeri) for g in Gider.query.filter(extract('month', Gider.tarih) == bu_ay, extract('year', Gider.tarih) == bu_yil).all())
     
-    # Kâr Hesaplama
+    # 4. Tahmini Kâr Hesaplama
     hesaplanan_kar = aylik_is_hacmi - (aylik_satinalma + aylik_gider)
+
+    # 5. Kırmızı Alarm Sistemi (Devam eden işleri listeler)
+    alarm_listesi = IsKaydi.query.filter(IsKaydi.durum == 'Devam Ediyor').all()
+
+    # 6. Hedef Çubuğu Hesaplaması
+    aylik_hedef = 50000.0  # Örnek hedef
+    hedef_yuzde = min((aylik_is_hacmi / aylik_hedef) * 100, 100)
 
     return render_template('index.html', 
                            ay_adi=guncel_ay, 
@@ -40,6 +47,9 @@ def index():
                            ticari_alim=round(aylik_satinalma, 2), 
                            giderler=round(aylik_gider, 2), 
                            kar=round(hesaplanan_kar, 2), 
+                           alarm_listesi=alarm_listesi,
+                           hedef_yuzde=round(hedef_yuzde, 0),
+                           aylik_hedef=aylik_hedef,
                            kurlar=GUNCEL_KURLAR)
 
 @genel_bp.route('/login', methods=['POST'])
