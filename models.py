@@ -38,6 +38,10 @@ class IsKaydi(db.Model):
     para_birimi = db.Column(db.String(5), default='TL')
     maliyet = db.Column(db.Float, default=0.0) 
     teslim_tarihi = db.Column(db.String(20))
+    # --- YENİ EKLENEN ALANLAR ---
+    vade_gun = db.Column(db.Integer, default=0) # İş tesliminden kaç gün sonra ödeme beklendiği
+    teslim_edildi_tarihi = db.Column(db.DateTime, nullable=True) # İşin gerçekten teslim edildiği tarih
+    # ----------------------------
     durum = db.Column(db.String(20), default='Devam Ediyor')
     kayit_tarihi = db.Column(db.DateTime, default=datetime.now)
     musteri_id = db.Column(db.Integer, db.ForeignKey('musteri.id'), nullable=False)

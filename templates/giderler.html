@@ -43,7 +43,8 @@
                     <th class="ps-4">Tarih</th>
                     <th>Kategori</th>
                     <th>Açıklama</th>
-                    <th>Ödenen Hesap</th> <th class="text-end pe-4">Tutar</th>
+                    <th>Ödenen Hesap</th> 
+                    <th class="text-end pe-4">Tutar</th>
                     <th class="text-end pe-4">İşlem</th>
                 </tr>
             </thead>
@@ -64,7 +65,8 @@
                         <div class="text-muted" style="font-size: 0.65rem;">Kur: {{ g.kur_degeri }}</div>
                         {% endif %}
                     </td>
-                    <td> <span class="small fw-bold text-primary">
+                    <td> 
+                        <span class="small fw-bold text-primary">
                             <i class="bi bi-bank2 me-1"></i> {{ g.kasa_kaydi.ad if g.kasa_kaydi else 'Belirtilmedi' }}
                         </span>
                     </td>
@@ -115,7 +117,8 @@
                         <input type="text" name="aciklama" class="form-control bg-light border-0 p-3" placeholder="Örn: 34 ABC 12 Benzin" required>
                     </div>
 
-                    <div class="mb-3"> <label class="form-label small fw-medium text-uppercase">Ödemenin Yapıldığı Hesap</label>
+                    <div class="mb-3"> 
+                        <label class="form-label small fw-medium text-uppercase">Ödemenin Yapıldığı Hesap</label>
                         <select name="banka_kasa_id" class="form-select bg-light border-0 p-3" required>
                             <option value="">Lütfen hesap seçin...</option>
                             {% for kasa in kasalar %}

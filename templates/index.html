@@ -3,7 +3,17 @@
 
 {% block content %}
 <div class="mb-5">
-    <h3 class="fw-bold mb-3 text-secondary">{{ ay_adi }} Ayı Genel Durum</h3>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="fw-bold m-0 text-secondary">{{ ay_adi }} Ayı Özeti</h3>
+        <div class="d-flex gap-2">
+            <button class="btn btn-success rounded-pill px-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#hizliTahsilatModal">
+                <i class="bi bi-plus-lg me-1"></i>TAHSİLAT
+            </button>
+            <button class="btn btn-warning text-white rounded-pill px-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#hizliGiderModal">
+                <i class="bi bi-dash-lg me-1"></i>GİDER
+            </button>
+        </div>
+    </div>
     
     <div class="card card-custom p-4 mb-4 border-0 shadow-sm">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -37,18 +47,16 @@
             <div class="card card-custom p-4 border-0 h-100 shadow-sm text-center">
                 <div class="text-uppercase small fw-bold text-muted mb-2">ALINAN İŞLER</div>
                 <div class="h3 fw-bold text-primary mb-0">{{ "{:,.0f}".format(is_hacmi) }} ₺</div>
-                <div class="small text-muted mt-1">Bu ayki toplam ciro</div>
+                <div class="small text-muted mt-1">{{ "{:,.2f}".format(is_hacmi / kurlar.USD) }} $ / {{ "{:,.2f}".format(is_hacmi / kurlar.EUR) }} €</div>
             </div>
         </div>
-        
         <div class="col-md-3 col-6">
             <div class="card card-custom p-4 border-0 h-100 shadow-sm text-center">
-                <div class="text-uppercase small fw-bold text-muted mb-2">HAMMADDE ALIMI</div>
+                <div class="text-uppercase small fw-bold text-muted mb-2">MALZEME BORCU</div>
                 <div class="h3 fw-bold text-danger mb-0">{{ "{:,.0f}".format(ticari_alim) }} ₺</div>
-                <div class="small text-muted mt-1">Bu ayki malzeme borcu</div>
+                <div class="small text-muted mt-1">{{ "{:,.2f}".format(ticari_alim / kurlar.USD) }} $ / {{ "{:,.2f}".format(ticari_alim / kurlar.EUR) }} €</div>
             </div>
         </div>
-
         <div class="col-md-3 col-6">
             <div class="card card-custom p-4 border-0 h-100 shadow-sm text-center">
                 <div class="text-uppercase small fw-bold text-muted mb-2">GİDERLER</div>
@@ -56,7 +64,6 @@
                 <div class="small text-muted mt-1">Kira, maaş, fatura vb.</div>
             </div>
         </div>
-
         <div class="col-md-3 col-6">
             <div class="card card-custom p-4 border-0 h-100 shadow-sm text-center" style="background-color: #f1f8e9;">
                 <div class="text-uppercase small fw-bold text-success mb-2">TAHMİNİ KÂR</div>
@@ -65,78 +72,111 @@
             </div>
         </div>
     </div>
-
-    {% if alarm_listesi %}
-    <div class="alert alert-danger border-0 shadow-sm mt-4 mb-0" style="border-radius: 20px; background-color: #fff5f5;">
-        <h6 class="fw-bold text-danger mb-3"><i class="bi bi-exclamation-triangle-fill me-2"></i>DİKKAT: TESLİMATI BEKLEYEN İŞLER</h6>
-        <div class="table-responsive">
-            <table class="table table-sm table-borderless mb-0 small">
-                <thead>
-                    <tr class="text-muted border-bottom">
-                        <th class="ps-0">Müşteri</th>
-                        <th>İş Tanımı</th>
-                        <th class="text-end">Tutar</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for is in alarm_listesi %}
-                    <tr>
-                        <td class="ps-0"><strong>{{ is.sahibi.ad_soyad }}</strong></td>
-                        <td>{{ is.is_tanimi }}</td>
-                        <td class="text-end text-danger fw-bold">{{ "{:,.2f}".format(is.toplam_bedel) }} {{ is.para_birimi }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-    {% endif %}
 </div>
-
-<hr class="my-5 opacity-25">
 
 <div class="row g-4 justify-content-center">
     <div class="col-md-4">
         <a href="{{ url_for('musteri.satislar') }}" class="text-decoration-none">
-            <div class="card card-custom h-100 border-0 shadow-lg card-hover-effect text-center p-5" style="transition: transform 0.2s;">
-                <div class="mb-3">
-                    <i class="bi bi-people-fill display-1 text-primary"></i>
-                </div>
+            <div class="card card-custom h-100 border-0 shadow-lg text-center p-5">
+                <i class="bi bi-people-fill display-1 text-primary mb-3"></i>
                 <h2 class="fw-bold text-dark">SATIŞLAR</h2>
-                <p class="text-muted">Müşteriler, Sipariş Takibi ve Tahsilat Yönetimi</p>
             </div>
         </a>
     </div>
-
+    <div class="col-md-4">
+        <a href="{{ url_for('musteri.vadesi_yaklasanlar') }}" class="text-decoration-none">
+            <div class="card card-custom h-100 border-0 shadow-lg text-center p-5">
+                <i class="bi bi-calendar-event display-1 text-info mb-3"></i>
+                <h2 class="fw-bold text-dark">VADE TAKİBİ</h2>
+            </div>
+        </a>
+    </div>
     <div class="col-md-4">
         <a href="{{ url_for('tedarikci.ticari_borclar') }}" class="text-decoration-none">
-            <div class="card card-custom h-100 border-0 shadow-lg card-hover-effect text-center p-5" style="transition: transform 0.2s;">
-                <div class="mb-3">
-                    <i class="bi bi-boxes display-1 text-danger"></i>
-                </div>
-                <h2 class="fw-bold text-dark">TİCARİ BORÇLAR</h2>
-                <p class="text-muted">Tedarikçi Yönetimi ve Hammadde Alımları</p>
-            </div>
-        </a>
-    </div>
-
-    <div class="col-md-4">
-        <a href="{{ url_for('gider.giderler') }}" class="text-decoration-none">
-            <div class="card card-custom h-100 border-0 shadow-lg card-hover-effect text-center p-5" style="transition: transform 0.2s;">
-                <div class="mb-3">
-                    <i class="bi bi-wallet2 display-1 text-warning"></i>
-                </div>
-                <h2 class="fw-bold text-dark">GİDERLER</h2>
-                <p class="text-muted">Kira, Personel, Fatura ve Diğer İşletme Giderleri</p>
+            <div class="card card-custom h-100 border-0 shadow-lg text-center p-5">
+                <i class="bi bi-boxes display-1 text-danger mb-3"></i>
+                <h2 class="fw-bold text-dark">BORÇLAR</h2>
             </div>
         </a>
     </div>
 </div>
 
-<style>
-    .card-hover-effect:hover {
-        transform: translateY(-10px);
-        background-color: #f8f9fa;
-    }
-</style>
+<div class="modal fade" id="hizliTahsilatModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow" style="border-radius: 20px;">
+            <div class="modal-body p-4">
+                <h5 class="fw-bold mb-4 text-center">HIZLI TAHSİLAT</h5>
+                <form action="/musteri_odeme_ekle/0" id="tahsilatForm" method="POST">
+                    <div class="mb-3">
+                        <label class="small fw-bold">MÜŞTERİ</label>
+                        <select name="musteri_id_hizli" class="form-select bg-light border-0 p-3" onchange="document.getElementById('tahsilatForm').action='/musteri_odeme_ekle/'+this.value" required>
+                            <option value="">Seçiniz...</option>
+                            {% for m in musteriler %}<option value="{{ m.id }}">{{ m.ad_soyad }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-8 mb-3">
+                            <label class="small fw-bold">TUTAR</label>
+                            <input type="number" step="0.01" name="tutar" class="form-control bg-light border-0 p-3" required>
+                        </div>
+                        <div class="col-4 mb-3">
+                            <label class="small fw-bold">BİRİM</label>
+                            <select name="birim" class="form-select bg-light border-0 p-3">
+                                <option value="TL">₺</option><option value="USD">$</option><option value="EUR">€</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="small fw-bold">HESAP</label>
+                        <select name="banka_kasa_id" class="form-select bg-light border-0 p-3" required>
+                            {% for k in kasalar %}<option value="{{ k.id }}">{{ k.ad }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="small fw-bold">AÇIKLAMA</label>
+                        <input type="text" name="aciklama" class="form-control bg-light border-0 p-3" placeholder="Örn: Nakit">
+                    </div>
+                    <button type="submit" class="btn btn-success w-100 py-3 shadow fw-bold">KAYDET</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="hizliGiderModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow" style="border-radius: 20px;">
+            <div class="modal-body p-4">
+                <h5 class="fw-bold mb-4 text-center">HIZLI GİDER KAYDI</h5>
+                <form action="{{ url_for('gider.gider_ekle') }}" method="POST">
+                    <div class="mb-3">
+                        <label class="small fw-bold">KATEGORİ</label>
+                        <select name="kategori" class="form-select bg-light border-0 p-3" required>
+                            <option value="Kira">Kira</option><option value="Personel">Personel</option><option value="Enerji">Enerji</option><option value="Diğer">Diğer</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-8 mb-3">
+                            <label class="small fw-bold">TUTAR</label>
+                            <input type="number" step="0.01" name="tutar" class="form-control bg-light border-0 p-3" required>
+                        </div>
+                        <div class="col-4 mb-3">
+                            <label class="small fw-bold">BİRİM</label>
+                            <select name="birim" class="form-select bg-light border-0 p-3">
+                                <option value="TL">₺</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="small fw-bold">HESAP</label>
+                        <select name="banka_kasa_id" class="form-select bg-light border-0 p-3" required>
+                            {% for k in kasalar %}<option value="{{ k.id }}">{{ k.ad }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-warning text-white w-100 py-3 shadow fw-bold">GİDERİ KAYDET</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
