@@ -1,17 +1,17 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash
 from sqlalchemy import extract
-# ÖNEMLİ: Transfer modelini buradan import etmeyi unutma
-from models import db, IsKaydi, SatinAlma, Gider, Ayarlar, BankaKasa, Transfer
+from models import db, IsKaydi, SatinAlma, Gider, Ayarlar, BankaKasa, Transfer, Kullanici
 from utils import GUNCEL_KURLAR, kurlari_sabitle
+from datetime import datetime
 
 genel_bp = Blueprint('genel', __name__)
 
 @genel_bp.route('/')
 def index():
+    # Oturum kontrolü
     if 'logged_in' not in session: 
         return render_template('giris.html')
     
-    from datetime import datetime
     bugun = datetime.now()
     bu_ay, bu_yil = bugun.month, bugun.year
 
@@ -59,9 +59,46 @@ def index():
                            aylik_hedef=aylik_hedef,
                            kurlar=GUNCEL_KURLAR)
 
+@genel_bp.route('/ayarlar', methods=['GET', 'POST'])
+def ayarlar():
+    if 'logged_in' not in session: 
+        return redirect(url_for('genel.index'))
+    
+    # Şu anki kullanıcıyı al (Örnekte tek admin olduğu için direkt çekiyoruz)
+    kullanici = Kullanici.query.filter_by(kullanici_adi='admin').first()
+    ayar = Ayarlar.query.first()
+
+    if request.method == 'POST':
+        islem = request.form.get('islem')
+
+        # 1. Şifre Güncelleme İşlemi
+        if islem == 'sifre_degistir':
+            mevcut_sifre = request.form.get('mevcut_sifre')
+            yeni_sifre = request.form.get('yeni_sifre')
+
+            if kullanici.sifre_kontrol(mevcut_sifre):
+                kullanici.sifre_belirle(yeni_sifre)
+                db.session.commit()
+                flash('Şifreniz başarıyla güncellendi.', 'success')
+            else:
+                flash('Mevcut şifreniz hatalı!', 'danger')
+        
+        # 2. Genel Hedef Güncelleme İşlemi
+        elif islem == 'hedef_guncelle':
+            yeni_hedef = float(request.form.get('yeni_hedef') or 0)
+            if ayar:
+                ayar.ay_hedefi = yeni_hedef
+                db.session.commit()
+                flash('Aylık hedef başarıyla güncellendi.', 'success')
+
+        return redirect(url_for('genel.ayarlar'))
+
+    return render_template('ayarlar.html', kullanici=kullanici, ayar=ayar)
+
 @genel_bp.route('/kasa_banka_yonetimi')
 def kasa_banka_yonetimi():
-    if 'logged_in' not in session: return redirect(url_for('genel.index'))
+    if 'logged_in' not in session: 
+        return redirect(url_for('genel.index'))
     
     kasalar = BankaKasa.query.all()
     kasa_ozetleri = []
@@ -75,13 +112,10 @@ def kasa_banka_yonetimi():
         toplam_tedarikci = sum(t.tutar for t in k.tedarikci_odemeleri)
         
         # Transferler: Gelen (+) ve Giden (-)
-        # Bu hesaba gelen paralar
         gelen_transfer = sum(tr.tutar for tr in Transfer.query.filter_by(hedef_hesap_id=k.id).all())
-        # Bu hesaptan çıkan paralar
         giden_transfer = sum(tr.tutar for tr in Transfer.query.filter_by(kaynak_hesap_id=k.id).all())
         
         # NET BAKİYE HESAPLAMA
-        # Bakiye = (Tahsilatlar + Gelen Transferler) - (Giderler + Tedarikçi Ödemeleri + Giden Transferler)
         bakiye = (toplam_gelir + gelen_transfer) - (toplam_gider + toplam_tedarikci + giden_transfer)
         
         kasa_ozetleri.append({
@@ -96,7 +130,8 @@ def kasa_banka_yonetimi():
 
 @genel_bp.route('/transfer_yap', methods=['POST'])
 def transfer_yap():
-    if 'logged_in' not in session: return redirect(url_for('genel.index'))
+    if 'logged_in' not in session: 
+        return redirect(url_for('genel.index'))
     
     tutar = float(request.form.get('tutar') or 0)
     kaynak_id = int(request.form.get('kaynak_hesap_id'))
@@ -117,14 +152,23 @@ def transfer_yap():
 
 @genel_bp.route('/kasa_banka_ekle', methods=['POST'])
 def kasa_banka_ekle():
-    if 'logged_in' not in session: return redirect(url_for('genel.index'))
-    db.session.add(BankaKasa(ad=request.form.get('ad'), tur=request.form.get('tur'), hesap_no=request.form.get('hesap_no')))
+    if 'logged_in' not in session: 
+        return redirect(url_for('genel.index'))
+    
+    yeni_kasa = BankaKasa(
+        ad=request.form.get('ad'), 
+        tur=request.form.get('tur'), 
+        hesap_no=request.form.get('hesap_no')
+    )
+    db.session.add(yeni_kasa)
     db.session.commit()
     return redirect(url_for('genel.kasa_banka_yonetimi'))
 
 @genel_bp.route('/kasa_banka_sil/<int:id>')
 def kasa_banka_sil(id):
-    if 'logged_in' not in session: return redirect(url_for('genel.index'))
+    if 'logged_in' not in session: 
+        return redirect(url_for('genel.index'))
+    
     kasa = BankaKasa.query.get_or_404(id)
     db.session.delete(kasa)
     db.session.commit()
@@ -132,7 +176,9 @@ def kasa_banka_sil(id):
 
 @genel_bp.route('/hedef_guncelle', methods=['POST'])
 def hedef_guncelle():
-    if 'logged_in' not in session: return redirect(url_for('genel.index'))
+    if 'logged_in' not in session: 
+        return redirect(url_for('genel.index'))
+    
     ayar = Ayarlar.query.first()
     if ayar:
         ayar.ay_hedefi = float(request.form.get('yeni_hedef') or 0)
@@ -141,10 +187,21 @@ def hedef_guncelle():
 
 @genel_bp.route('/login', methods=['POST'])
 def login():
-    if request.form.get('username') == 'admin' and request.form.get('password') == '1234':
+    k_adi = request.form.get('username')
+    sifre = request.form.get('password')
+    
+    # Veritabanında kullanıcıyı sorgula
+    kullanici = Kullanici.query.filter_by(kullanici_adi=k_adi).first()
+    
+    # Kullanıcı varsa ve şifre hash kontrolü doğruysa
+    if kullanici and kullanici.sifre_kontrol(sifre):
         session.permanent = True
         session['logged_in'] = True
-    return redirect(url_for('genel.index'))
+        return redirect(url_for('genel.index'))
+    else:
+        # Hatalı girişte kullanıcıya mesaj göster
+        flash('Geçersiz kullanıcı adı veya şifre!', 'danger')
+        return redirect(url_for('genel.index'))
 
 @genel_bp.route('/logout')
 def logout():
@@ -153,5 +210,8 @@ def logout():
 
 @genel_bp.route('/kurlari_guncelle')
 def kurlari_guncelle():
+    if 'logged_in' not in session: 
+        return redirect(url_for('genel.index'))
+    
     kurlari_sabitle()
     return redirect(request.referrer or url_for('genel.index'))

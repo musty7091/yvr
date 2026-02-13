@@ -1,8 +1,23 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # Veritabanı bağlantısını başlatan ana nesne
 db = SQLAlchemy()
+
+# --- YENİ EKLENEN KULLANICI MODELİ ---
+class Kullanici(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    kullanici_adi = db.Column(db.String(50), unique=True, nullable=False)
+    sifre_hash = db.Column(db.String(255), nullable=False)
+
+    # Şifreyi şifreleyerek kaydetme fonksiyonu
+    def sifre_belirle(self, sifre):
+        self.sifre_hash = generate_password_hash(sifre)
+
+    # Girilen şifrenin doğruluğunu kontrol etme fonksiyonu
+    def sifre_kontrol(self, sifre):
+        return check_password_hash(self.sifre_hash, sifre)
 
 class Ayarlar(db.Model):
     id = db.Column(db.Integer, primary_key=True)

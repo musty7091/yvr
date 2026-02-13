@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Sistem Ayarları</h2>
+    <hr>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-key"></i> Güvenlik Ayarları</h5>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('genel.ayarlar') }}" method="POST">
+                        <input type="hidden" name="islem" value="sifre_degistir">
+                        <div class="mb-3">
+                            <label class="form-label">Mevcut Şifre</label>
+                            <input type="password" name="mevcut_sifre" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Yeni Şifre</label>
+                            <input type="password" name="yeni_sifre" class="form-control" required>
+                        </div>
+                        <button type="submit" class="btn btn-success w-100">Şifreyi Güncelle</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="fas fa-bullseye"></i> İşletme Hedefi</h5>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('genel.ayarlar') }}" method="POST">
+                        <input type="hidden" name="islem" value="hedef_guncelle">
+                        <div class="mb-3">
+                            <label class="form-label">Aylık Ciro Hedefi (TL)</label>
+                            <input type="number" name="yeni_hedef" class="form-control" value="{{ ayar.ay_hedefi }}" step="0.01">
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Hedefi Güncelle</button>
+                    </form>
+                    <p class="text-muted mt-3 small">
+                        * Bu hedef, ana sayfadaki ilerleme çubuğunu (progress bar) kontrol eder.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
