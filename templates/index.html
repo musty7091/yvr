@@ -5,10 +5,28 @@
 <div class="mb-5">
     <h3 class="fw-bold mb-3 text-secondary">{{ ay_adi }} Ayı Genel Durum</h3>
     
+    
     <div class="card card-custom p-4 mb-4 border-0 shadow-sm">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="fw-bold small text-muted">AYLIK SATIŞ HEDEFİ: {{ "{:,.0f}".format(aylik_hedef) }} ₺</span>
-            <span class="fw-bold text-primary">{{ hedef_yuzde|int }}%</span>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <span class="fw-bold small text-muted text-uppercase">Aylık Satış Hedefi</span>
+                <div class="h4 mb-0 fw-bold">{{ "{:,.0f}".format(aylik_hedef) }} ₺</div>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary rounded-pill px-3" data-bs-toggle="collapse" data-bs-target="#hedefForm">
+                <i class="bi bi-pencil me-1"></i>Hedefi Değiştir
+            </button>
+        </div>
+
+        <div class="collapse mb-3" id="hedefForm">
+            <form action="{{ url_for('genel.hedef_guncelle') }}" method="POST" class="d-flex gap-2">
+                <input type="number" name="yeni_hedef" class="form-control form-control-sm border-0 bg-light" placeholder="Yeni hedefi girin..." required>
+                <button type="submit" class="btn btn-sm btn-primary px-3">Güncelle</button>
+            </form>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="small text-muted">%{{ hedef_yuzde|int }} Tamamlandı</span>
+            <span class="small fw-bold text-primary">{{ "{:,.0f}".format(is_hacmi) }} ₺</span>
         </div>
         <div class="progress" style="height: 12px; border-radius: 10px; background-color: #f0f0f0;">
             <div class="progress-bar bg-primary" role="progressbar" style="width: {{ hedef_yuzde }}%; transition: width 1s ease-in-out;"></div>

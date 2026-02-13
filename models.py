@@ -82,3 +82,7 @@ class Gider(db.Model):
     birim = db.Column(db.String(5), default='TL')
     kur_degeri = db.Column(db.Float, default=1.0)
     tarih = db.Column(db.DateTime, default=datetime.now)
+
+class Ayarlar(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    ay_hedefi = db.Column(db.Float, default=50000.0)
