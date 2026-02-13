@@ -7,27 +7,34 @@ import platform
 from flask import render_template, make_response
 from urllib.parse import quote
 
-# Başlangıç kurları
+# Başlangıç kurları - Sistem ayağa kalktığında ilk bu değerler kullanılır
 GUNCEL_KURLAR = {"USD": 34.0, "EUR": 36.5, "GBP": 42.0, "tarih": "Henüz Güncellenmedi"}
 
 def kurlari_sabitle():
-    """Merkez Bankası üzerinden güncel kurları çeker."""
+    """Merkez Bankası üzerinden güncel kurları çeker ve sözlüğü günceller."""
     global GUNCEL_KURLAR
     try:
+        # TCMB XML servisine bağlanıyoruz
         response = requests.get("https://www.tcmb.gov.tr/kurlar/today.xml", timeout=5)
         tree = ET.fromstring(response.content)
+        
+        # XML içinden ilgili para birimlerini ayıklıyoruz
         usd = float(tree.find(".//Currency[@Kod='USD']/BanknoteSelling").text)
         eur = float(tree.find(".//Currency[@Kod='EUR']/BanknoteSelling").text)
         gbp = float(tree.find(".//Currency[@Kod='GBP']/BanknoteSelling").text)
         
-        GUNCEL_KURLAR = {
+        # GUNCEL_KURLAR sözlüğünün içeriğini doğrudan güncelliyoruz
+        # Bu yöntem, Blueprint kullanan diğer dosyaların da güncel veriyi görmesini sağlar.
+        GUNCEL_KURLAR.update({
             "USD": round(usd, 4),
             "EUR": round(eur, 4),
             "GBP": round(gbp, 4),
             "tarih": datetime.now().strftime("%d.%m.%Y %H:%M")
-        }
+        })
         return True
-    except:
+    except Exception as e:
+        # Hata durumunda terminale bilgi basar ama sistemi durdurmaz
+        print(f"Kur güncelleme hatası: {e}")
         return False
 
 def pdf_olustur(musteri, toplam_tl, toplam_usd):
