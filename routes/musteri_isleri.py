@@ -112,7 +112,7 @@ def musteri_duzenle(id):
         return redirect(url_for('musteri.musteriler'))
     return render_template('musteri_duzenle.html', musteri=musteri)
 
-@musteri_bp.route('/musteri_sil/<int:id>')
+@musteri_bp.route('/musteri_sil/<int:id>', methods=['POST'])
 def musteri_sil(id):
     if 'logged_in' not in session: 
         return redirect(url_for('genel.index'))
@@ -206,7 +206,7 @@ def is_durum_geri_al(id):
     db.session.commit()
     return redirect(url_for('musteri.musteri_detay', id=is_k.musteri_id))
 
-@musteri_bp.route('/is_sil/<int:id>')
+@musteri_bp.route('/is_sil/<int:id>', methods=['POST'])
 def is_sil(id):
     if 'logged_in' not in session: 
         return redirect(url_for('genel.index'))
@@ -238,7 +238,7 @@ def musteri_odeme_ekle(m_id):
     db.session.commit()
     return redirect(request.referrer or url_for('musteri.musteri_detay', id=m_id))
 
-@musteri_bp.route('/odeme_sil/<int:id>')
+@musteri_bp.route('/odeme_sil/<int:id>', methods=['POST'])
 def odeme_sil(id):
     if 'logged_in' not in session: 
         return redirect(url_for('genel.index'))

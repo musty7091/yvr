@@ -9,11 +9,11 @@
     </div>
     
     <div class="col-md-4 mt-3 mt-md-0">
-        <form action="/musteriler" method="GET" class="d-flex shadow-sm rounded-pill overflow-hidden border">
+        <form action="{{ url_for('musteri.musteriler') }}" method="GET" class="d-flex shadow-sm rounded-pill overflow-hidden border">
             <input type="text" name="q" class="form-control border-0 ps-4" placeholder="Müşteri veya İşyeri Ara..." value="{{ terim or '' }}" style="background-color: #fff;">
             
             {% if arama_var %}
-            <a href="/musteriler" class="btn btn-white border-0 text-danger bg-white d-flex align-items-center" title="Aramayı Temizle">
+            <a href="{{ url_for('musteri.musteriler') }}" class="btn btn-white border-0 text-danger bg-white d-flex align-items-center" title="Aramayı Temizle">
                 <i class="bi bi-x-lg"></i>
             </a>
             {% endif %}
@@ -25,7 +25,7 @@
     </div>
 
     <div class="col-md-3 mt-3 mt-md-0 text-md-end d-flex justify-content-md-end gap-2">
-        <a href="/pasif_musteriler" class="btn btn-light text-secondary border shadow-sm" title="Silinenleri Gör">
+        <a href="{{ url_for('musteri.pasif_musteriler') }}" class="btn btn-light text-secondary border shadow-sm" title="Silinenleri Gör">
             <i class="bi bi-archive"></i>
         </a>
         <button class="btn btn-yvr-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#musteriEkleModal">
@@ -57,17 +57,27 @@
                         <div class="small text-muted"><i class="bi bi-telephone me-2"></i>{{ m.telefon or '-' }}</div>
                     </td>
                     <td class="text-end pe-4">
-                        <a href="/is_ekle?m_id={{ m.id }}" class="btn btn-sm btn-outline-primary fw-bold rounded-pill px-3 me-2 shadow-sm" title="Bu Müşteriye İş Ekle">
+                        <a href="{{ url_for('musteri.is_ekle') }}?m_id={{ m.id }}" class="btn btn-sm btn-outline-primary fw-bold rounded-pill px-3 me-2 shadow-sm" title="Bu Müşteriye İş Ekle">
                             <i class="bi bi-plus-lg me-1"></i>İŞ EKLE
                         </a>
 
-                        <a href="/musteri/{{ m.id }}" class="btn btn-sm btn-yvr-primary fw-bold rounded-pill px-4 me-2 shadow-sm" title="Müşteri Detayına Git">
+                        <a href="{{ url_for('musteri.musteri_detay', id=m.id) }}" class="btn btn-sm btn-yvr-primary fw-bold rounded-pill px-4 me-2 shadow-sm" title="Müşteri Detayına Git">
+
                             DETAY
                         </a>
                         
-                        <a href="/musteri_duzenle/{{ m.id }}" class="btn btn-sm btn-light text-primary rounded-circle me-1" style="width: 32px; height: 32px;" title="Düzenle"><i class="bi bi-pencil-square"></i></a>
+                        <a href="{{ url_for('musteri.musteri_duzenle', id=m.id) }}" class="btn btn-sm btn-light text-primary rounded-circle me-1" style="width: 32px; height: 32px;" title="Düzenle"><i class="bi bi-pencil-square"></i></a>
                         
-                        <a href="/musteri_sil/{{ m.id }}" onclick="return confirm('Bu müşteriyi listeden kaldırmak istediğinize emin misiniz? (Geçmiş işlemleri varsa silinmez, arşive kaldırılır.)');" class="btn btn-sm btn-light text-danger rounded-circle" style="width: 32px; height: 32px;" title="Listeden Kaldır"><i class="bi bi-trash"></i></a>
+                        <form method="post" action="{{ url_for('musteri.musteri_sil', id=m.id) }}"
+                            style="display:inline;"
+                            onsubmit="return confirm('Bu müşteriyi listeden kaldırmak istediğinize emin misiniz? (Geçmiş işlemleri varsa silinmez, arşive kaldırılır.)');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-light text-danger rounded-circle"
+                                    style="width: 32px; height: 32px;" title="Listeden Kaldır">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+
                     </td>
                 </tr>
                 {% endfor %}
@@ -91,8 +101,8 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow" style="border-radius: 25px;">
             <div class="modal-body p-5">
-                <h5 class="fw-bold mb-4">Yeni Müşteri Tanımı</h5>
-                <form action="/musteri_ekle" method="POST">
+                <h5 class="fw-bold mb-4">Yeni Müşteri Tanımı</h5>               
+                <form action="{{ url_for('musteri.musteri_ekle') }}" method="POST">
                     <div class="mb-3">
                         <label class="form-label small fw-medium">AD SOYAD</label>
                         <input type="text" name="ad_soyad" class="form-control border-0 bg-light p-3" style="border-radius: 12px;" placeholder="Örn: Ahmet Yılmaz" required>

@@ -169,7 +169,7 @@ def kasa_banka_ekle():
     db.session.commit()
     return redirect(url_for('genel.kasa_banka_yonetimi'))
 
-@genel_bp.route('/kasa_banka_sil/<int:id>')
+@genel_bp.route('/kasa_banka_sil/<int:id>', methods=['POST'])
 def kasa_banka_sil(id):
     if 'logged_in' not in session: 
         return redirect(url_for('genel.index'))

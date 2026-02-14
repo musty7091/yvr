@@ -51,7 +51,7 @@ def gider_ekle():
     db.session.commit()
     return redirect(url_for('gider.giderler'))
 
-@gider_bp.route('/gider_sil/<int:id>')
+@gider_bp.route('/gider_sil/<int:id>', methods=['POST'])
 def gider_sil(id):
     if 'logged_in' not in session: 
         return redirect(url_for('genel.index'))

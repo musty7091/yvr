@@ -5,7 +5,7 @@
     <div class="col-md-7">
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb mb-2">
-                <li class="breadcrumb-item small"><a href="/ticari_borclar" class="text-decoration-none text-danger">Tedarikçiler</a></li>
+                <li class="breadcrumb-item small"><a href="{{ url_for('tedarikci.ticari_borclar') }}" class="text-decoration-none text-danger">Tedarikçiler</a></li>
                 <li class="breadcrumb-item small active">{{ tedarikci.firma_adi }}</li>
             </ol>
         </nav>
@@ -59,7 +59,15 @@
                         </td>
                         <td class="text-end pe-4">
                             <span class="fw-medium me-3 text-danger">- {{ "{:,.2f}".format(alim.tutar) }} {{ alim.para_birimi }}</span>
-                            <a href="/alim_sil/{{ alim.id }}" onclick="return confirm('Bu alım kaydını silmek istediğinize emin misiniz?');" class="text-muted small"><i class="bi bi-trash"></i></a>
+                            <form method="post" action="{{ url_for('tedarikci.alim_sil', id=alim.id) }}"
+                                style="display:inline;"
+                                onsubmit="return confirm('Bu alım kaydını silmek istediğinize emin misiniz?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="text-muted small border-0 bg-transparent">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+
                         </td>
                     </tr>
                     {% endfor %}
@@ -95,7 +103,15 @@
                         </td>
                         <td class="text-end pe-4">
                             <span class="text-success small fw-medium me-3">+ {{ "{:,.2f}".format(o.tutar) }} {{ o.birim }}</span>
-                            <a href="/tedarikci_odeme_sil/{{ o.id }}" onclick="return confirm('Silmek istediğinize emin misiniz?');" class="text-muted small"><i class="bi bi-trash"></i></a>
+                            <form method="post" action="{{ url_for('tedarikci.tedarikci_odeme_sil', id=o.id) }}"
+                                style="display:inline;"
+                                onsubmit="return confirm('Silmek istediğinize emin misiniz?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="text-muted small border-0 bg-transparent">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+
                         </td>
                     </tr>
                     {% endfor %}
@@ -113,7 +129,7 @@
         <div class="modal-content border-0 shadow" style="border-radius: 20px;">
             <div class="modal-body p-4">
                 <h6 class="fw-bold mb-4 text-center text-danger">Malzeme Alışı Gir (Borçlan)</h6>
-                <form action="/malzeme_alim_ekle" method="POST">
+                <form action="{{ url_for('tedarikci.malzeme_alim_ekle') }}" method="POST">
                     <input type="hidden" name="tedarikci_id" value="{{ tedarikci.id }}">
                     <div class="mb-3">
                         <label class="form-label small">MALZEME / İŞ TANIMI</label>

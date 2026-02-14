@@ -106,10 +106,10 @@
         <div class="modal-content border-0 shadow" style="border-radius: 20px;">
             <div class="modal-body p-4">
                 <h5 class="fw-bold mb-4 text-center">HIZLI TAHSİLAT</h5>
-                <form action="/musteri_odeme_ekle/0" id="tahsilatForm" method="POST">
+                <form action="{{ url_for('musteri.musteri_odeme_ekle', m_id=0) }}" id="tahsilatForm" method="POST">
                     <div class="mb-3">
                         <label class="small fw-bold">MÜŞTERİ</label>
-                        <select name="musteri_id_hizli" class="form-select bg-light border-0 p-3" onchange="document.getElementById('tahsilatForm').action='/musteri_odeme_ekle/'+this.value" required>
+                        <select name="musteri_id_hizli" class="form-select bg-light border-0 p-3" onchange="document.getElementById('tahsilatForm').action='{{ url_for('musteri.musteri_odeme_ekle', m_id=0) }}'.replace('/0','/'+this.value)" required>
                             <option value="">Seçiniz...</option>
                             {% for m in musteriler %}<option value="{{ m.id }}">{{ m.ad_soyad }}</option>{% endfor %}
                         </select>

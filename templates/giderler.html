@@ -74,9 +74,15 @@
                         - {{ "{:,.2f}".format(g.tutar) }} {{ g.birim }}
                     </td>
                     <td class="text-end pe-4">
-                        <a href="{{ url_for('gider.gider_sil', id=g.id) }}" onclick="return confirm('Bu harcamayı silmek istediğinize emin misiniz?');" class="btn btn-sm text-muted">
-                            <i class="bi bi-trash"></i>
-                        </a>
+                        <form method="post" action="{{ url_for('gider.gider_sil', id=g.id) }}"
+                            style="display:inline;"
+                            onsubmit="return confirm('Bu harcamayı silmek istediğinize emin misiniz?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm text-muted">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+
                     </td>
                 </tr>
                 {% endfor %}

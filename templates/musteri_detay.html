@@ -5,7 +5,7 @@
     <div class="col-md-7">
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb mb-2">
-                <li class="breadcrumb-item small"><a href="/musteriler" class="text-decoration-none">Müşteriler</a></li>
+                <li class="breadcrumb-item small"><a href="{{ url_for('musteri.musteriler') }}" class="text-decoration-none">Müşteriler</a></li>
                 <li class="breadcrumb-item small active">{{ musteri.ad_soyad }}</li>
             </ol>
         </nav>
@@ -24,7 +24,7 @@
         <button class="btn btn-success btn-sm rounded-pill px-4 py-2 me-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#odemeEkleModal">
             <i class="bi bi-cash-coin me-2"></i>TAHSİLAT EKLE
         </button>
-        <a href="/pdf_indir/{{ musteri.id }}" class="btn btn-outline-dark btn-sm rounded-pill px-4 py-2">
+        <a href="{{ url_for('musteri.pdf_indir', id=musteri.id) }}" class="btn btn-outline-dark btn-sm rounded-pill px-4 py-2">
             <i class="bi bi-file-earmark-pdf me-2"></i>HESAP EKSTRESİ (pdf)
         </a>
     </div>
@@ -63,17 +63,25 @@
                                 <span class="fw-medium">{{ "{:,.2f}".format(is.toplam_bedel) }} {{ is.para_birimi }}</span>
                                 
                                 {% if is.durum == 'Devam Ediyor' %}
-                                    <a href="/is_teslim_et/{{ is.id }}" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1" style="font-size: 0.75rem;">
+                                    <a href="{{ url_for('musteri.is_teslim_et', id=is.id) }}" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1" style="font-size: 0.75rem;">
                                         TESLİM ET
                                     </a>
                                 {% else %}
                                     <span class="badge bg-success rounded-pill px-2 py-1 fw-normal" style="font-size: 0.7rem;">
                                         <i class="bi bi-check-lg me-1"></i>TESLİM EDİLDİ
                                     </span>
-                                    <a href="/is_durum_geri_al/{{ is.id }}" class="text-muted small" title="Geri Al (Devam Ediyor yap)"><i class="bi bi-arrow-counterclockwise"></i></a>
+                                    <a href="{{ url_for('musteri.is_durum_geri_al', id=is.id) }}" class="text-muted small" title="Geri Al (Devam Ediyor yap)"><i class="bi bi-arrow-counterclockwise"></i></a>
                                 {% endif %}
                                 
-                                <a href="/is_sil/{{ is.id }}" onclick="return confirm('Bu iş kaydını silmek istediğinize emin misiniz? Bakiyeden düşülecektir.');" class="text-danger small"><i class="bi bi-trash"></i></a>
+                                <form method="post" action="{{ url_for('musteri.is_sil', id=is.id) }}"
+                                    style="display:inline;"
+                                    onsubmit="return confirm('Bu iş kaydını silmek istediğinize emin misiniz? Bakiyeden düşülecektir.');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="text-danger small border-0 bg-transparent">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+
                             </div>
                         </td>
                     </tr>
@@ -110,7 +118,15 @@
                         </td>
                         <td class="text-end pe-4">
                             <span class="text-success small fw-medium me-3">+ {{ "{:,.2f}".format(o.tutar) }} {{ o.birim }}</span>
-                            <a href="/odeme_sil/{{ o.id }}" onclick="return confirm('Bu tahsilat kaydını silmek istediğinize emin misiniz? Bakiye artacaktır.');" class="text-danger small"><i class="bi bi-trash"></i></a>
+                            <form method="post" action="{{ url_for('musteri.odeme_sil', id=o.id) }}"
+                                style="display:inline;"
+                                onsubmit="return confirm('Bu tahsilat kaydını silmek istediğinize emin misiniz? Bakiye artacaktır.');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="text-danger small border-0 bg-transparent">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+
                         </td>
                     </tr>
                     {% endfor %}
@@ -128,7 +144,7 @@
         <div class="modal-content border-0 shadow" style="border-radius: 20px;">
             <div class="modal-body p-4">
                 <h6 class="fw-bold mb-4 text-center text-uppercase">Tahsilat Kaydı Al</h6>
-                <form action="/musteri_odeme_ekle/{{ musteri.id }}" method="POST">
+                <form action="{{ url_for('musteri.musteri_odeme_ekle', m_id=musteri.id) }}" method="POST">
                     <div class="mb-3">
                         <label class="form-label small">TUTAR</label>
                         <input type="number" step="0.01" name="tutar" class="form-control bg-light border-0 p-3" required>

@@ -48,7 +48,7 @@ def tedarikci_duzenle(id):
         return redirect(url_for('tedarikci.ticari_borclar'))
     return render_template('tedarikci_duzenle.html', tedarikci=tedarikci)
 
-@tedarikci_bp.route('/tedarikci_sil/<int:id>')
+@tedarikci_bp.route('/tedarikci_sil/<int:id>', methods=['POST'])
 def tedarikci_sil(id):
     if 'logged_in' not in session: return redirect(url_for('genel.index'))
     t = Tedarikci.query.get_or_404(id)
@@ -65,7 +65,7 @@ def malzeme_alim_ekle():
     db.session.commit()
     return redirect(url_for('tedarikci.tedarikci_detay', id=t_id))
 
-@tedarikci_bp.route('/alim_sil/<int:id>')
+@tedarikci_bp.route('/alim_sil/<int:id>', methods=['POST'])
 def alim_sil(id):
     if 'logged_in' not in session: return redirect(url_for('genel.index'))
     kayit = SatinAlma.query.get_or_404(id)
@@ -93,7 +93,7 @@ def tedarikci_odeme_yap():
     db.session.commit()
     return redirect(url_for('tedarikci.tedarikci_detay', id=t_id))
 
-@tedarikci_bp.route('/tedarikci_odeme_sil/<int:id>')
+@tedarikci_bp.route('/tedarikci_odeme_sil/<int:id>', methods=['POST'])
 def tedarikci_odeme_sil(id):
     if 'logged_in' not in session: return redirect(url_for('genel.index'))
     kayit = TedarikciOdeme.query.get_or_404(id)

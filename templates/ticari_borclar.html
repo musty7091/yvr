@@ -13,10 +13,10 @@
     </div>
     
     <div class="col-md-4 mt-3 mt-md-0">
-        <form action="/ticari_borclar" method="GET" class="d-flex shadow-sm rounded-pill overflow-hidden border">
+        <form action="{{ url_for('tedarikci.ticari_borclar') }}" method="GET" class="d-flex shadow-sm rounded-pill overflow-hidden border">
             <input type="text" name="q" class="form-control border-0 ps-4" placeholder="Firma Ara..." value="{{ terim or '' }}">
             {% if arama_var %}
-            <a href="/ticari_borclar" class="btn btn-white border-0 text-danger bg-white d-flex align-items-center"><i class="bi bi-x-lg"></i></a>
+            <a href="{{ url_for('tedarikci.ticari_borclar') }}" class="btn btn-white border-0 text-danger bg-white d-flex align-items-center"><i class="bi bi-x-lg"></i></a>
             {% endif %}
             <button type="submit" class="btn btn-white border-0 text-danger bg-white px-3"><i class="bi bi-search"></i></button>
         </form>
@@ -62,17 +62,23 @@
                     </td>
 
                     <td class="text-end pe-4">
-                        <a href="/tedarikci/{{ t.id }}" class="btn btn-sm btn-outline-danger fw-bold rounded-pill px-3 shadow-sm me-1" title="Hesap Detayı">
+                        <a href="{{ url_for('tedarikci.tedarikci_detay', id=t.id) }}" class="btn btn-sm btn-outline-danger fw-bold rounded-pill px-3 shadow-sm me-1" title="Hesap Detayı">
                             DETAY
                         </a>
                         
-                        <a href="/tedarikci_duzenle/{{ t.id }}" class="btn btn-sm btn-light text-primary rounded-circle me-1" style="width: 32px; height: 32px;" title="Düzenle">
+                        <a href="{{ url_for('tedarikci.tedarikci_duzenle', id=t.id) }}" class="btn btn-sm btn-light text-primary rounded-circle me-1" style="width: 32px; height: 32px;" title="Düzenle">
                             <i class="bi bi-pencil-square"></i>
                         </a>
                         
-                        <a href="/tedarikci_sil/{{ t.id }}" onclick="return confirm('Bu tedarikçiyi listeden kaldırmak/arşivlemek istediğinize emin misiniz?');" class="btn btn-sm btn-light text-danger rounded-circle" style="width: 32px; height: 32px;" title="Sil/Arşivle">
-                            <i class="bi bi-trash"></i>
-                        </a>
+                        <form method="post" action="{{ url_for('tedarikci.tedarikci_sil', id=t.id) }}" 
+                            style="display:inline;"
+                            onsubmit="return confirm('Bu tedarikçiyi listeden kaldırmak/arşivlemek istediğinize emin misiniz?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-light text-danger rounded-circle" 
+                                    style="width: 32px; height: 32px;" title="Sil/Arşivle">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
                     </td>
                 </tr>
                 {% endfor %}
@@ -91,7 +97,7 @@
         <div class="modal-content border-0 shadow" style="border-radius: 25px;">
             <div class="modal-body p-5">
                 <h5 class="fw-bold mb-4 text-danger">Yeni Tedarikçi Ekle</h5>
-                <form action="/tedarikci_ekle" method="POST">
+                <form action="{{ url_for('tedarikci.tedarikci_ekle') }}" method="POST">
                     <div class="mb-3">
                         <label class="form-label small fw-medium">FİRMA ADI</label>
                         <input type="text" name="firma_adi" class="form-control border-0 bg-light p-3" required>
