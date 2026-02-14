@@ -21,7 +21,7 @@
     </div>
     
     <div class="col-md-5 text-md-end align-self-end mt-3 mt-md-0">
-        <button class="btn btn-success btn-sm rounded-pill px-4 py-2 me-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#odemeEkleModal">
+        <button class="btn btn-success btn-sm rounded-pill px-4 py-2 me-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#tahsilatModal">
             <i class="bi bi-cash-coin me-2"></i>TAHSİLAT EKLE
         </button>
         <a href="{{ url_for('musteri.pdf_indir', id=musteri.id) }}" class="btn btn-outline-dark btn-sm rounded-pill px-4 py-2">
@@ -139,33 +139,77 @@
     </div>
 </div>
 
-<div class="modal fade" id="odemeEkleModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow" style="border-radius: 20px;">
-            <div class="modal-body p-4">
-                <h6 class="fw-bold mb-4 text-center text-uppercase">Tahsilat Kaydı Al</h6>
-                <form action="{{ url_for('musteri.musteri_odeme_ekle', m_id=musteri.id) }}" method="POST">
-                    <div class="mb-3">
-                        <label class="form-label small">TUTAR</label>
-                        <input type="number" step="0.01" name="tutar" class="form-control bg-light border-0 p-3" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small">PARA BİRİMİ</label>
-                        <select name="birim" class="form-select bg-light border-0">
-                            <option value="TL">₺ (TL)</option>
-                            <option value="USD">$ (USD)</option>
-                            <option value="EUR">€ (EUR)</option>
-                            <option value="GBP">£ (GBP)</option>
-                        </select>
-                    </div>
-                    <div class="mb-4">
-                        <label class="form-label small">NOT / AÇIKLAMA</label>
-                        <input type="text" name="aciklama" class="form-control bg-light border-0 p-3" placeholder="Örn: Nakit Tahsilat">
-                    </div>
-                    <button type="submit" class="btn btn-yvr-primary w-100 py-3">İŞLEMİ KAYDET</button>
-                </form>
-            </div>
-        </div>
+<div class="modal fade" id="tahsilatModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow" style="border-radius: 22px;">
+      <div class="modal-body p-5">
+
+        <h5 class="fw-bold mb-4 text-center">TAHSİLAT KAYDI AL</h5>
+
+        <form action="{{ url_for('musteri.musteri_odeme_ekle', m_id=musteri.id) }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+
+          <!-- TUTAR -->
+          <div class="mb-3">
+            <label class="form-label small fw-medium">TUTAR</label>
+            <input type="number" step="0.01" min="0" name="tutar"
+                   class="form-control border-0 bg-light p-3"
+                   style="border-radius: 12px;" required>
+          </div>
+
+          <!-- PARA BİRİMİ -->
+          <div class="mb-3">
+            <label class="form-label small fw-medium">PARA BİRİMİ</label>
+            <select name="birim" class="form-select border-0 bg-light p-3"
+                    style="border-radius: 12px;" required>
+              <option value="TL" selected>₺ (TL)</option>
+              <option value="USD">$ (USD)</option>
+              <option value="EUR">€ (EUR)</option>
+              <option value="GBP">£ (GBP)</option>
+            </select>
+          </div>
+
+          <!-- TAHSİLAT KASASI / BANKASI (ZORUNLU) -->
+          <div class="mb-3">
+            <label class="form-label small fw-medium">TAHSİLAT NEREYE İŞLENECEK?</label>
+            <select name="banka_kasa_id" class="form-select border-0 bg-light p-3"
+                    style="border-radius: 12px;" required>
+              <option value="" selected disabled>Kasa/Banka seçiniz...</option>
+              {% for k in kasalar %}
+                <option value="{{ k.id }}">{{ k.ad }} ({{ k.tur }})</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- ÖDEME YÖNTEMİ -->
+          <div class="mb-3">
+            <label class="form-label small fw-medium">ÖDEME YÖNTEMİ</label>
+            <select name="odeme_yontemi" class="form-select border-0 bg-light p-3"
+                    style="border-radius: 12px;" required>
+              <option value="Nakit" selected>Nakit</option>
+              <option value="Banka">Banka</option>
+              <option value="POS">POS</option>
+              <option value="Havale/EFT">Havale/EFT</option>
+            </select>
+          </div>
+
+          <!-- NOT / AÇIKLAMA -->
+          <div class="mb-4">
+            <label class="form-label small fw-medium">NOT / AÇIKLAMA</label>
+            <input type="text" name="aciklama"
+                   class="form-control border-0 bg-light p-3"
+                   style="border-radius: 12px;"
+                   placeholder="Örn: Nakit Tahsilat">
+          </div>
+
+          <button type="submit" class="btn btn-yvr-primary w-100 py-3 shadow">
+            İŞLEMİ KAYDET
+          </button>
+        </form>
+
+      </div>
     </div>
+  </div>
 </div>
 {% endblock %}

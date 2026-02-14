@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
 from sqlalchemy import extract
-from models import db, IsKaydi, SatinAlma, Gider, Ayarlar, BankaKasa, Transfer, Kullanici
+from models import db, IsKaydi, SatinAlma, Gider, Ayarlar, BankaKasa, Transfer, Kullanici, Odeme
 from utils import GUNCEL_KURLAR, kurlari_sabitle
 from datetime import datetime
 import smtplib
@@ -105,12 +105,19 @@ def kasa_banka_yonetimi():
     if 'logged_in' not in session: 
         return redirect(url_for('genel.index'))
     
+    db.session.expire_all()
+    
     kasalar = BankaKasa.query.all()
     kasa_ozetleri = []
 
     for k in kasalar:
         # Gelirler: Müşteri Tahsilatları
-        toplam_gelir = sum(o.tutar for o in k.musteri_odemeleri)
+        toplam_gelir = db.session.query(
+            db.func.coalesce(
+                db.func.sum(Odeme.tutar * db.func.coalesce(Odeme.kur_degeri, 1.0)), 
+                0.0
+            )
+        ).filter(Odeme.banka_kasa_id == k.id).scalar()
         
         # Giderler: İşletme Giderleri + Tedarikçi Ödemeleri
         toplam_gider = sum(g.tutar for g in k.isletme_giderleri)
