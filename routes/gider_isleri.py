@@ -18,8 +18,8 @@ def giderler():
     bu_ay_toplam = sum(g.tutar * g.kur_degeri for g in gider_listesi 
                        if g.tarih.month == bu_ay.month and g.tarih.year == bu_ay.year)
     
-    # Gider eklerken paranın hangi hesaptan/bankadan çıkacağını seçmek için kasaları gönderiyoruz
-    kasalar = BankaKasa.query.filter_by(durum='Aktif').all()
+    # HATA DÜZELTİLDİ: Modelde 'durum' sütunu olmadığı için filtre kaldırıldı.
+    kasalar = BankaKasa.query.all()
     
     return render_template('giderler.html', 
                            giderler=gider_listesi, 
@@ -37,12 +37,11 @@ def gider_ekle():
     
     # Paranın eksilmesini sağlayan gider kaydı
     yeni_gider = Gider(
-        kategori=request.form.get('kategori'), # Burada 'Şahsi Çekim' seçilebilir
-        aciklama=request.form.get('aciklama'),
+        kategori=request.form.get('kategori'),
+        baslik=request.form.get('aciklama'), # Modelindeki sütun adı 'baslik'
         tutar=float(request.form.get('tutar') or 0),
-        birim=birim,
+        para_birimi=birim, # Modelindeki sütun adı 'para_birimi'
         kur_degeri=islem_kuru,
-        # ÖNEMLİ: Paranın hangi banka/kasadan eksileceğini belirleyen bağlantı
         banka_kasa_id=request.form.get('banka_kasa_id'),
         tarih=datetime.now()
     )

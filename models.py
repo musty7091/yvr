@@ -24,17 +24,14 @@ class Ayarlar(db.Model):
     ay_hedefi = db.Column(db.Float, default=50000.0)
 
 class BankaKasa(db.Model):
-    """Sistemdeki tüm banka hesapları ve nakit kasaların tanımlandığı yer"""
     id = db.Column(db.Integer, primary_key=True)
-    ad = db.Column(db.String(100), nullable=False) # Örn: Ziraat Bankası, Merkez Kasa
-    tur = db.Column(db.String(50), default='Banka') # Banka, Kasa, POS
-    hesap_no = db.Column(db.String(50)) # İsteğe bağlı hesap numarası
-    durum = db.Column(db.String(20), default='Aktif')
-    
-    # İlişkiler (Bu kasaya giren ve çıkan paralar)
-    musteri_odemeleri = db.relationship('Odeme', backref='kasa_kaydi', lazy=True)
-    tedarikci_odemeleri = db.relationship('TedarikciOdeme', backref='kasa_kaydi', lazy=True)
-    isletme_giderleri = db.relationship('Gider', backref='kasa_kaydi', lazy=True)
+    ad = db.Column(db.String(100), nullable=False)
+    tur = db.Column(db.String(50)) # Nakit, Banka, Kredi Kartı
+    hesap_no = db.Column(db.String(50))
+    baslangic_bakiye = db.Column(db.Float, default=0.0) # Sütun tam olarak burada olmalı
+    odemeler = db.relationship('Odeme', backref='banka_kasa', lazy=True)
+    giderler = db.relationship('Gider', backref='banka_kasa', lazy=True)
+    tedarikci_odemeleri = db.relationship('TedarikciOdeme', backref='banka_kasa', lazy=True)
 
 class Musteri(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -60,6 +57,8 @@ class IsKaydi(db.Model):
     durum = db.Column(db.String(20), default='Devam Ediyor')
     kayit_tarihi = db.Column(db.DateTime, default=datetime.now)
     musteri_id = db.Column(db.Integer, db.ForeignKey('musteri.id'), nullable=False)
+    # HATA BURADAYDI: IsKaydi içinden ödemelere ulaşabilmek için bu ilişki eklendi
+    odemeler = db.relationship('Odeme', backref='ait_oldugu_is', lazy=True)
 
 class Odeme(db.Model):
     """Müşteriden gelen paralar (Gelirler)"""
@@ -75,6 +74,8 @@ class Odeme(db.Model):
     kur_degeri = db.Column(db.Float, default=1.0)
     odeme_tarihi = db.Column(db.DateTime, default=datetime.now)
     musteri_id = db.Column(db.Integer, db.ForeignKey('musteri.id'), nullable=False)
+    # HATA BURADAYDI: Ödemenin hangi işe ait olduğunu takip eden sütun eklendi
+    is_kaydi_id = db.Column(db.Integer, db.ForeignKey('is_kaydi.id'), nullable=True)
 
 class Tedarikci(db.Model):
     id = db.Column(db.Integer, primary_key=True)

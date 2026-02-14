@@ -29,7 +29,7 @@
         </div>
 
         <div class="col-md-6">
-            <div class="card shadow-sm">
+            <div class="card shadow-sm mb-4">
                 <div class="card-header bg-dark text-white">
                     <h5 class="mb-0"><i class="fas fa-bullseye"></i> İşletme Hedefi</h5>
                 </div>
@@ -42,20 +42,59 @@
                         </div>
                         <button type="submit" class="btn btn-primary w-100">Hedefi Güncelle</button>
                     </form>
-                    <p class="text-muted mt-3 small">
-                        * Bu hedef, ana sayfadaki ilerleme çubuğunu (progress bar) kontrol eder.
-                    </p>
                 </div>
             </div>
         </div>
-        <div class="col-md-12 mt-4">
+
+        <div class="col-md-12">
+            <div class="card shadow-sm border-info mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-bank"></i> Kasa Başlangıç Bakiyeleri</h5>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted">Sisteme geçtiğiniz gündeki mevcut paralarınızı buradan girebilirsiniz.</p>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Kasa Adı</th>
+                                    <th>Tür</th>
+                                    <th width="200">Başlangıç Bakiyesi (₺)</th>
+                                    <th width="100">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for k in kasalar %}
+                                <tr>
+                                    <td>{{ k.ad }}</td>
+                                    <td>{{ k.tur }}</td>
+                                    <form action="{{ url_for('genel.ayarlar') }}" method="POST">
+                                        <input type="hidden" name="islem" value="kasa_baslangic_guncelle">
+                                        <input type="hidden" name="kasa_id" value="{{ k.id }}">
+                                        <td>
+                                            <input type="number" step="0.01" name="baslangic_tutar" class="form-control form-control-sm" value="{{ k.baslangic_bakiye or 0 }}">
+                                        </td>
+                                        <td>
+                                            <button type="submit" class="btn btn-sm btn-info text-white">Kaydet</button>
+                                        </td>
+                                    </form>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-12">
             <div class="card shadow-sm border-warning">
                 <div class="card-header bg-warning text-dark">
                     <h5 class="mb-0"><i class="bi bi-cloud-download"></i> Veri Güvenliği</h5>
                 </div>
                 <div class="card-body text-center">
-                    <p>Tüm verilerinizi (Müşteriler, Ödemeler, Giderler) tek tıkla e-posta adresinize yedekleyebilirsiniz.</p>
-                    <a href="{{ url_for('genel.yedekle_ve_mail_at') }}" class="btn btn-warning px-5 fw-bold" onclick="this.innerHTML='İşlem yapılıyor, lütfen bekleyin...'; this.classList.add('disabled');">
+                    <p>Tüm verilerinizi tek tıkla e-posta adresinize yedekleyebilirsiniz.</p>
+                    <a href="{{ url_for('genel.yedekle_ve_mail_at') }}" class="btn btn-warning px-5 fw-bold">
                         ŞİMDİ YEDEKLE VE E-POSTA GÖNDER
                     </a>
                 </div>

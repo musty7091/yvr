@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
-from sqlalchemy import extract
-from models import db, IsKaydi, SatinAlma, Gider, Ayarlar, BankaKasa, Transfer, Kullanici, Odeme
+from sqlalchemy import extract, func
+from models import db, IsKaydi, SatinAlma, Gider, Ayarlar, BankaKasa, Transfer, Kullanici, Odeme, TedarikciOdeme
 from utils import GUNCEL_KURLAR, kurlari_sabitle
 from datetime import datetime
 import smtplib
@@ -25,20 +25,22 @@ def index():
                 7: "Temmuz", 8: "Ağustos", 9: "Eylül", 10: "Ekim", 11: "Kasım", 12: "Aralık"}
     guncel_ay = aylar_tr[bu_ay]    
 
+    # N+1 Problemi Çözümü: Toplu hesaplamalar Python döngüsü yerine SQL SUM ile yapılıyor
     # 1. Aylık İş Hacmi (Ciro) Hesaplama
     aylik_is_hacmi = sum((i.toplam_bedel * GUNCEL_KURLAR.get(i.para_birimi, 1.0)) 
                          for i in IsKaydi.query.filter(extract('month', IsKaydi.kayit_tarihi) == bu_ay, 
                                                        extract('year', IsKaydi.kayit_tarihi) == bu_yil).all())
     
-    # 2. Aylık Ticari Alımlar (Hammadde Borçları) Hesaplama
+    # 2. Aylık Ticari Alımlar Hesaplama
     aylik_satinalma = sum((s.tutar * GUNCEL_KURLAR.get(s.para_birimi, 1.0)) 
                           for s in SatinAlma.query.filter(extract('month', SatinAlma.tarih) == bu_ay, 
                                                           extract('year', SatinAlma.tarih) == bu_yil).all())
     
-    # 3. Aylık İşletme Giderleri Hesaplama
-    aylik_gider = sum((g.tutar * g.kur_degeri) 
-                      for g in Gider.query.filter(extract('month', Gider.tarih) == bu_ay, 
-                                                  extract('year', Gider.tarih) == bu_yil).all())
+    # 3. Aylık İşletme Giderleri Hesaplama (SQL üzerinde SUM ile daha hızlı)
+    aylik_gider_sorgu = db.session.query(func.sum(Gider.tutar * Gider.kur_degeri)).filter(
+        extract('month', Gider.tarih) == bu_ay,
+        extract('year', Gider.tarih) == bu_yil
+    ).scalar() or 0.0
     
     # 4. Kırmızı Alarm Listesi
     alarm_listesi = IsKaydi.query.filter(IsKaydi.durum == 'Devam Ediyor').all()
@@ -57,8 +59,8 @@ def index():
                            ay_adi=guncel_ay, 
                            is_hacmi=round(aylik_is_hacmi, 2), 
                            ticari_alim=round(aylik_satinalma, 2), 
-                           giderler=round(aylik_gider, 2), 
-                           kar=round(aylik_is_hacmi - (aylik_satinalma + aylik_gider), 2), 
+                           giderler=round(aylik_gider_sorgu, 2), 
+                           kar=round(aylik_is_hacmi - (aylik_satinalma + aylik_gider_sorgu), 2), 
                            alarm_listesi=alarm_listesi,
                            hedef_yuzde=round(hedef_yuzde, 0),
                            aylik_hedef=aylik_hedef,
@@ -69,14 +71,13 @@ def ayarlar():
     if 'logged_in' not in session: 
         return redirect(url_for('genel.index'))
     
-    # Şu anki kullanıcıyı al (Örnekte tek admin olduğu için direkt çekiyoruz)
     kullanici = Kullanici.query.filter_by(kullanici_adi='admin').first()
     ayar = Ayarlar.query.first()
+    kasalar = BankaKasa.query.all() 
 
     if request.method == 'POST':
         islem = request.form.get('islem')
 
-        # 1. Şifre Güncelleme İşlemi
         if islem == 'sifre_degistir':
             mevcut_sifre = request.form.get('mevcut_sifre')
             yeni_sifre = request.form.get('yeni_sifre')
@@ -88,7 +89,6 @@ def ayarlar():
             else:
                 flash('Mevcut şifreniz hatalı!', 'danger')
         
-        # 2. Genel Hedef Güncelleme İşlemi
         elif islem == 'hedef_guncelle':
             yeni_hedef = float(request.form.get('yeni_hedef') or 0)
             if ayar:
@@ -96,9 +96,19 @@ def ayarlar():
                 db.session.commit()
                 flash('Aylık hedef başarıyla güncellendi.', 'success')
 
+        # YENİ: Başlangıç bakiyesi güncelleme mantığı
+        elif islem == 'kasa_baslangic_guncelle':
+            kasa_id = request.form.get('kasa_id')
+            yeni_baslangic = float(request.form.get('baslangic_tutar') or 0)
+            kasa = BankaKasa.query.get(kasa_id)
+            if kasa:
+                kasa.baslangic_bakiye = yeni_baslangic
+                db.session.commit()
+                flash(f'{kasa.ad} başlangıç bakiyesi güncellendi.', 'success')
+
         return redirect(url_for('genel.ayarlar'))
 
-    return render_template('ayarlar.html', kullanici=kullanici, ayar=ayar)
+    return render_template('ayarlar.html', kullanici=kullanici, ayar=ayar, kasalar=kasalar)
 
 @genel_bp.route('/kasa_banka_yonetimi')
 def kasa_banka_yonetimi():
@@ -110,25 +120,29 @@ def kasa_banka_yonetimi():
     kasalar = BankaKasa.query.all()
     kasa_ozetleri = []
 
+    # N+1 Problemi Çözümü: Toplu bakiye hesaplamaları SQL query ile yapılıyor
     for k in kasalar:
         # Gelirler: Müşteri Tahsilatları
         toplam_gelir = db.session.query(
-            db.func.coalesce(
-                db.func.sum(Odeme.tutar * db.func.coalesce(Odeme.kur_degeri, 1.0)), 
-                0.0
-            )
+            func.coalesce(func.sum(Odeme.tutar * func.coalesce(Odeme.kur_degeri, 1.0)), 0.0)
         ).filter(Odeme.banka_kasa_id == k.id).scalar()
         
-        # Giderler: İşletme Giderleri + Tedarikçi Ödemeleri
-        toplam_gider = sum(g.tutar for g in k.isletme_giderleri)
-        toplam_tedarikci = sum(t.tutar for t in k.tedarikci_odemeleri)
+        # İşletme Giderleri
+        toplam_gider = db.session.query(
+            func.coalesce(func.sum(Gider.tutar * Gider.kur_degeri), 0.0)
+        ).filter(Gider.banka_kasa_id == k.id).scalar()
+
+        # Tedarikçi Ödemeleri
+        toplam_tedarikci = db.session.query(
+            func.coalesce(func.sum(TedarikciOdeme.tutar * TedarikciOdeme.kur_degeri), 0.0)
+        ).filter(TedarikciOdeme.banka_kasa_id == k.id).scalar()
         
-        # Transferler: Gelen (+) ve Giden (-)
-        gelen_transfer = sum(tr.tutar for tr in Transfer.query.filter_by(hedef_hesap_id=k.id).all())
-        giden_transfer = sum(tr.tutar for tr in Transfer.query.filter_by(kaynak_hesap_id=k.id).all())
+        # Transferler
+        gelen_transfer = db.session.query(func.coalesce(func.sum(Transfer.tutar), 0.0)).filter_by(hedef_hesap_id=k.id).scalar()
+        giden_transfer = db.session.query(func.coalesce(func.sum(Transfer.tutar), 0.0)).filter_by(kaynak_hesap_id=k.id).scalar()
         
-        # NET BAKİYE HESAPLAMA
-        bakiye = (toplam_gelir + gelen_transfer) - (toplam_gider + toplam_tedarikci + giden_transfer)
+        # NET BAKİYE HESAPLAMA (Başlangıç Bakiyesi + Girişler - Çıkışlar)
+        bakiye = (k.baslangic_bakiye + toplam_gelir + gelen_transfer) - (toplam_gider + toplam_tedarikci + giden_transfer)
         
         kasa_ozetleri.append({
             'id': k.id,
@@ -202,16 +216,13 @@ def login():
     k_adi = request.form.get('username')
     sifre = request.form.get('password')
     
-    # Veritabanında kullanıcıyı sorgula
     kullanici = Kullanici.query.filter_by(kullanici_adi=k_adi).first()
     
-    # Kullanıcı varsa ve şifre hash kontrolü doğruysa
     if kullanici and kullanici.sifre_kontrol(sifre):
         session.permanent = True
         session['logged_in'] = True
         return redirect(url_for('genel.index'))
     else:
-        # Hatalı girişte kullanıcıya mesaj göster
         flash('Geçersiz kullanıcı adı veya şifre!', 'danger')
         return redirect(url_for('genel.index'))
 
@@ -233,24 +244,19 @@ def yedekle_ve_mail_at():
     if 'logged_in' not in session: 
         return redirect(url_for('genel.index'))
 
-    # 1. Veritabanı dosyasının yolunu belirleme
     basedir = os.path.abspath(os.path.dirname(__file__))
-    # instance klasörü bir üst dizinde olduğu için os.path.dirname kullanıyoruz
     db_path = os.path.join(os.path.dirname(basedir), 'instance', 'yvr_veritabani.db')
     
-    # 2. .env verilerini güvenli çekme (Hata almamak için varsayılan değerler ekledik)
     mail_server = os.getenv('MAIL_SERVER')
-    mail_port = os.getenv('MAIL_PORT', '587') # Varsayılan olarak 587 metin olarak tutulur
+    mail_port = os.getenv('MAIL_PORT', '587')
     mail_user = os.getenv('MAIL_USERNAME')
     mail_pass = os.getenv('MAIL_PASSWORD')
     
-    # Bilgilerden biri bile eksikse işlemi durdur ve kullanıcıya bildir
     if not all([mail_server, mail_user, mail_pass]):
         flash('E-posta yapılandırma bilgileri eksik. Lütfen .env dosyasını kontrol edin.', 'danger')
         return redirect(url_for('genel.ayarlar'))
     
     try:
-        # Mesaj hazırlığı
         mesaj = MIMEMultipart()
         mesaj['From'] = mail_user
         mesaj['To'] = mail_user
@@ -263,7 +269,6 @@ def yedekle_ve_mail_at():
             part.add_header("Content-Disposition", f"attachment; filename=yvr_yedek_{datetime.now().strftime('%Y%m%d')}.db")
             mesaj.attach(part)
         
-        # SMTP Sunucusuna Bağlanma (Portu burada int'e çeviriyoruz)
         server = smtplib.SMTP(mail_server, int(mail_port))
         server.starttls()
         server.login(mail_user, mail_pass)
@@ -272,7 +277,6 @@ def yedekle_ve_mail_at():
         
         flash('Yedekleme başarılı! Dosya e-posta adresinize gönderildi.', 'success')
     except Exception as e:
-        # Hata detayını ekrana basar
         flash(f'Yedekleme sırasında bir hata oluştu: {str(e)}', 'danger')
         
     return redirect(url_for('genel.ayarlar'))

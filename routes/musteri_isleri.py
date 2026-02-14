@@ -23,7 +23,8 @@ def satislar():
         for o in m.odemeler:
             toplam_alacak_tl -= (o.tutar * o.kur_degeri)
 
-    yaklasan_isler = [is_k for is_k in IsKaydi.query.filter(IsKaydi.teslim_tarihi != "", IsKaydi.durum == 'Devam Ediyor').order_by(IsKaydi.teslim_tarihi.asc()).all() if is_k.sahibi.durum == 'Aktif'][:5]
+    # HATA DÜZELTİLDİ: vade_tarihi yerine teslim_tarihi kullanıldı
+    yaklasan_isler = IsKaydi.query.filter(IsKaydi.durum == 'Devam Ediyor').order_by(IsKaydi.teslim_tarihi.asc()).limit(5).all()
     
     simdi = datetime.now()
     bu_ayki_ciro = sum((o.tutar * o.kur_degeri) for o in Odeme.query.all() if o.odeme_tarihi.month == simdi.month and o.odeme_tarihi.year == simdi.year)
@@ -89,7 +90,7 @@ def musteri_detay(id):
     if 'logged_in' not in session: 
         return redirect(url_for('genel.index'))
     m = Musteri.query.get_or_404(id)
-    kasalar = BankaKasa.query.filter_by(durum='Aktif').all()
+    kasalar = BankaKasa.query.all()
     net_tl = sum(i.toplam_bedel * GUNCEL_KURLAR.get(i.para_birimi, 1.0) for i in m.isler) - sum(o.tutar * o.kur_degeri for o in m.odemeler)
     return render_template('musteri_detay.html', 
                            musteri=m, 
@@ -143,8 +144,7 @@ def musteri_aktif_et(id):
 def is_ekle():
     if 'logged_in' not in session: return redirect(url_for('genel.index'))
     secili_id = request.args.get('m_id')
-    # Kasalar listesini formda göstermek için veritabanından çekiyoruz
-    kasalar = BankaKasa.query.filter_by(durum='Aktif').all()
+    kasalar = BankaKasa.query.all()
     return render_template('is_ekle.html', 
                            musteriler=Musteri.query.filter_by(durum='Aktif').all(), 
                            secili_id=secili_id, 
@@ -157,19 +157,20 @@ def is_kaydet():
     t_bedel = float(request.form.get('toplam_bedel') or 0)
     p_birimi = request.form.get('para_birimi')
     v_gun = int(request.form.get('vade_gun') or 0)
-    kasa_id = request.form.get('banka_kasa_id') # Formdan gelen kasa ID
+    kasa_id = request.form.get('banka_kasa_id')
 
     yeni_is = IsKaydi(
         is_tanimi=is_adi, 
         toplam_bedel=round(t_bedel, 2), 
         para_birimi=p_birimi, 
-        maliyet=0.0, # Maliyet artık formdan gelmiyor, 0 olarak kaydediyoruz
+        maliyet=0.0,
         vade_gun=v_gun,
         teslim_tarihi=request.form.get('teslim_tarihi'), 
         durum='Devam Ediyor', 
         musteri_id=m_id
     )
     db.session.add(yeni_is)
+    db.session.commit()
     
     a_kapora = float(request.form.get('alinan_kapora') or 0)
     if a_kapora > 0:
@@ -180,7 +181,8 @@ def is_kaydet():
             aciklama=f"Kapora ({is_adi})", 
             kur_degeri=GUNCEL_KURLAR.get(k_birimi, 1.0) if k_birimi != 'TL' else 1.0, 
             odeme_yontemi='Nakit',
-            banka_kasa_id=kasa_id, # Kapora artık seçilen kasaya giriyor
+            banka_kasa_id=kasa_id,
+            is_kaydi_id=yeni_is.id,
             musteri_id=m_id
         ))
     db.session.commit()
@@ -218,7 +220,6 @@ def is_sil(id):
 
 @musteri_bp.route('/musteri_odeme_ekle/<int:m_id>', methods=['POST'])
 def musteri_odeme_ekle(m_id):
-    # Hızlı tahsilat desteği için m_id kontrolü
     if m_id == 0:
         m_id = int(request.form.get('musteri_id_hizli'))
         
@@ -232,6 +233,7 @@ def musteri_odeme_ekle(m_id):
         odeme_yontemi=request.form.get('odeme_yontemi'),
         banka_kasa_id=request.form.get('banka_kasa_id'),
         kur_degeri=kur, 
+        is_kaydi_id=request.form.get('is_id'),
         musteri_id=m_id
     )
     db.session.add(yeni_odeme)
