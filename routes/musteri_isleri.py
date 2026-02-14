@@ -1,9 +1,15 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
 from sqlalchemy import or_
 from models import db, Musteri, IsKaydi, Odeme, BankaKasa
-from utils import GUNCEL_KURLAR, pdf_olustur, money, rate
 from datetime import datetime, timedelta
 from decimal import Decimal
+
+# ImportError fix: money/rate utils.py içinde yoksa models.py'den al
+try:
+    from utils import GUNCEL_KURLAR, pdf_olustur, money, rate
+except ImportError:
+    from utils import GUNCEL_KURLAR, pdf_olustur
+    from models import money, rate
 
 musteri_bp = Blueprint('musteri', __name__)
 
@@ -44,14 +50,14 @@ def satislar():
 
     return render_template(
         'satislar.html',
-        alacak=float(money(toplam_alacak_tl)),
+        alacak=str(money(toplam_alacak_tl)),
         is_sayisi=devam_eden_is_sayisi,
         yaklasan_isler=yaklasan_isler,
         kurlar=GUNCEL_KURLAR,
         t_musteri=Musteri.query.count(),
         a_musteri=len(aktif_musteriler),
         biten_is=IsKaydi.query.filter_by(durum='Teslim Edildi').count(),
-        ay_ciro=float(money(bu_ayki_ciro))
+        ay_ciro=str(money(bu_ayki_ciro))
     )
 
 @musteri_bp.route('/vadesi_yaklasanlar')
@@ -124,8 +130,8 @@ def musteri_detay(id):
     return render_template(
         'musteri_detay.html',
         musteri=m,
-        toplam_tl=float(money(net_tl)),
-        toplam_usd=float(money(net_tl / usd_kur)) if usd_kur != 0 else 0.0,
+        toplam_tl=str(money(net_tl)),
+        toplam_usd=str(money(net_tl / usd_kur)) if usd_kur != 0 else "0.00",
         kurlar=GUNCEL_KURLAR,
         kasalar=kasalar
     )
@@ -320,4 +326,4 @@ def pdf_indir(id):
     usd_kur = rate(GUNCEL_KURLAR.get('USD', 1))
     net_usd = (net_tl / usd_kur) if usd_kur != 0 else Decimal("0")
 
-    return pdf_olustur(m, float(money(net_tl)), float(money(net_usd)))
+    return pdf_olustur(m, money(net_tl), money(net_usd))

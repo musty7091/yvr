@@ -48,13 +48,13 @@
                     </td>
                     
                     <td class="text-end">
-                        {% if t.guncel_bakiye > 1 %}
+                        {% if (t.guncel_bakiye|float) > 1 %}
                             <span class="badge bg-danger bg-opacity-10 text-danger px-3 py-2 rounded-pill" style="font-size: 0.9rem;">
-                                - {{ "{:,.2f}".format(t.guncel_bakiye) }} ₺
+                                - {{ "{:,.2f}".format(t.guncel_bakiye|float) }} ₺
                             </span>
-                        {% elif t.guncel_bakiye < -1 %}
+                        {% elif (t.guncel_bakiye|float) < -1 %}
                             <span class="text-success fw-bold small">
-                                + {{ "{:,.2f}".format(t.guncel_bakiye * -1) }} ₺ (Alacak)
+                                + {{ "{:,.2f}".format((t.guncel_bakiye|float) * -1) }} ₺ (Alacak)
                             </span>
                         {% else %}
                             <span class="text-muted small">Borç Yok</span>
