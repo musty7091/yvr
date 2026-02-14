@@ -3,6 +3,11 @@ from sqlalchemy import extract
 from models import db, IsKaydi, SatinAlma, Gider, Ayarlar, BankaKasa, Transfer, Kullanici
 from utils import GUNCEL_KURLAR, kurlari_sabitle
 from datetime import datetime
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
+import os
 
 genel_bp = Blueprint('genel', __name__)
 
@@ -215,3 +220,52 @@ def kurlari_guncelle():
     
     kurlari_sabitle()
     return redirect(request.referrer or url_for('genel.index'))
+
+@genel_bp.route('/yedekle_ve_mail_at')
+def yedekle_ve_mail_at():
+    if 'logged_in' not in session: 
+        return redirect(url_for('genel.index'))
+
+    # 1. Veritabanı dosyasının yolunu belirleme
+    basedir = os.path.abspath(os.path.dirname(__file__))
+    # instance klasörü bir üst dizinde olduğu için os.path.dirname kullanıyoruz
+    db_path = os.path.join(os.path.dirname(basedir), 'instance', 'yvr_veritabani.db')
+    
+    # 2. .env verilerini güvenli çekme (Hata almamak için varsayılan değerler ekledik)
+    mail_server = os.getenv('MAIL_SERVER')
+    mail_port = os.getenv('MAIL_PORT', '587') # Varsayılan olarak 587 metin olarak tutulur
+    mail_user = os.getenv('MAIL_USERNAME')
+    mail_pass = os.getenv('MAIL_PASSWORD')
+    
+    # Bilgilerden biri bile eksikse işlemi durdur ve kullanıcıya bildir
+    if not all([mail_server, mail_user, mail_pass]):
+        flash('E-posta yapılandırma bilgileri eksik. Lütfen .env dosyasını kontrol edin.', 'danger')
+        return redirect(url_for('genel.ayarlar'))
+    
+    try:
+        # Mesaj hazırlığı
+        mesaj = MIMEMultipart()
+        mesaj['From'] = mail_user
+        mesaj['To'] = mail_user
+        mesaj['Subject'] = f"YVR Sistem Yedek - {datetime.now().strftime('%d.%m.%Y')}"
+        
+        with open(db_path, "rb") as attachment:
+            part = MIMEBase("application", "octet-stream")
+            part.set_payload(attachment.read())
+            encoders.encode_base64(part)
+            part.add_header("Content-Disposition", f"attachment; filename=yvr_yedek_{datetime.now().strftime('%Y%m%d')}.db")
+            mesaj.attach(part)
+        
+        # SMTP Sunucusuna Bağlanma (Portu burada int'e çeviriyoruz)
+        server = smtplib.SMTP(mail_server, int(mail_port))
+        server.starttls()
+        server.login(mail_user, mail_pass)
+        server.send_message(mesaj)
+        server.quit()
+        
+        flash('Yedekleme başarılı! Dosya e-posta adresinize gönderildi.', 'success')
+    except Exception as e:
+        # Hata detayını ekrana basar
+        flash(f'Yedekleme sırasında bir hata oluştu: {str(e)}', 'danger')
+        
+    return redirect(url_for('genel.ayarlar'))
