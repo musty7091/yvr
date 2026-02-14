@@ -1,0 +1,19 @@
+# secrets
+.env
+
+# database / runtime
+instance/
+*.db
+
+# python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
