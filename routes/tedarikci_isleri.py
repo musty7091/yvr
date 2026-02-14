@@ -26,7 +26,7 @@ def tedarikci_detay(id):
     if 'logged_in' not in session: return redirect(url_for('genel.index'))
     t = Tedarikci.query.get_or_404(id)
     # Kasaları ödeme modalında listelemek için çekiyoruz
-    kasalar = BankaKasa.query.filter_by(durum='Aktif').all()
+    kasalar = BankaKasa.query.all()
     
     net_tl = sum(alim.tutar * GUNCEL_KURLAR.get(alim.para_birimi, 1.0) for alim in t.satin_almalar) - \
              sum(o.tutar * o.kur_degeri for o in t.odenenler)
@@ -101,6 +101,3 @@ def tedarikci_odeme_sil(id):
     db.session.delete(kayit)
     db.session.commit()
     return redirect(url_for('tedarikci.tedarikci_detay', id=t_id))
-
-
-

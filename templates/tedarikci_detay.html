@@ -130,6 +130,7 @@
             <div class="modal-body p-4">
                 <h6 class="fw-bold mb-4 text-center text-danger">Malzeme Alışı Gir (Borçlan)</h6>
                 <form action="{{ url_for('tedarikci.malzeme_alim_ekle') }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="tedarikci_id" value="{{ tedarikci.id }}">
                     <div class="mb-3">
                         <label class="form-label small">MALZEME / İŞ TANIMI</label>
@@ -167,6 +168,7 @@
             <div class="modal-body p-4">
                 <h6 class="fw-bold mb-4 text-center text-success">Tedarikçiye Ödeme Yap (Borç Düş)</h6>
                 <form action="{{ url_for('tedarikci.tedarikci_odeme_yap') }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="tedarikci_id" value="{{ tedarikci.id }}">
                     
                     <div class="mb-3">

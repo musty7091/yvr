@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
 from sqlalchemy import extract, func
-from models import db, IsKaydi, SatinAlma, Gider, Ayarlar, BankaKasa, Transfer, Kullanici, Odeme, TedarikciOdeme
+from models import db, IsKaydi, SatinAlma, Gider, Ayarlar, BankaKasa, Transfer, Kullanici, Odeme, TedarikciOdeme, Musteri
 from utils import GUNCEL_KURLAR, kurlari_sabitle
 from datetime import datetime
 import smtplib
@@ -55,6 +55,9 @@ def index():
     aylik_hedef = ayar.ay_hedefi
     hedef_yuzde = min((aylik_is_hacmi / aylik_hedef) * 100, 100) if aylik_hedef > 0 else 0
 
+    musteriler = Musteri.query.all()
+    kasalar = BankaKasa.query.all()
+
     return render_template('index.html', 
                            ay_adi=guncel_ay, 
                            is_hacmi=round(aylik_is_hacmi, 2), 
@@ -64,7 +67,9 @@ def index():
                            alarm_listesi=alarm_listesi,
                            hedef_yuzde=round(hedef_yuzde, 0),
                            aylik_hedef=aylik_hedef,
-                           kurlar=GUNCEL_KURLAR)
+                           kurlar=GUNCEL_KURLAR,
+                           musteriler=musteriler,
+                           kasalar=kasalar)
 
 @genel_bp.route('/ayarlar', methods=['GET', 'POST'])
 def ayarlar():

@@ -87,6 +87,19 @@
         .badge-pastel-blue { background-color: #d0ebff; color: #1971c2; }
         .badge-pastel-green { background-color: #e3fafc; color: #0b7285; }
 
+        /* Flash (soft) */
+        .yvr-alert {
+            border: 0;
+            border-radius: 16px;
+            padding: 14px 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.04);
+            font-weight: 400;
+        }
+        .yvr-alert.alert-success { background: #ecfdf3; color: #14532d; }
+        .yvr-alert.alert-warning { background: #fff7ed; color: #7c2d12; }
+        .yvr-alert.alert-danger  { background: #fff1f2; color: #7f1d1d; }
+        .yvr-alert.alert-info    { background: #eff6ff; color: #1e3a8a; }
+
         /* Scrollbar */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
@@ -153,7 +166,7 @@
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
-            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            <div class="alert alert-{{ category }} yvr-alert alert-dismissible fade show" role="alert" data-autoclose="true">
                 {{ message }}
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
@@ -172,13 +185,29 @@
     if (!token) return;
 
     document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(form => {
-    if (form.querySelector('input[name="csrf_token"]')) return;
+        if (form.querySelector('input[name="csrf_token"]')) return;
 
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = 'csrf_token';
-    input.value = token;
-    form.prepend(input);
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'csrf_token';
+        input.value = token;
+        form.prepend(input);
+    });
+})();
+
+(function () {
+    // Varsayılan süre: 4500ms (istersen 2500/6000 yap)
+    const AUTO_CLOSE_MS = 4500;
+
+    document.querySelectorAll('.alert[data-autoclose="true"]').forEach(el => {
+        window.setTimeout(() => {
+            try {
+                const alert = bootstrap.Alert.getOrCreateInstance(el);
+                alert.close();
+            } catch (e) {
+                // Bootstrap yoksa sessiz geç
+            }
+        }, AUTO_CLOSE_MS);
     });
 })();
 </script>

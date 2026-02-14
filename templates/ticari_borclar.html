@@ -98,6 +98,7 @@
             <div class="modal-body p-5">
                 <h5 class="fw-bold mb-4 text-danger">Yeni Tedarikçi Ekle</h5>
                 <form action="{{ url_for('tedarikci.tedarikci_ekle') }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label class="form-label small fw-medium">FİRMA ADI</label>
                         <input type="text" name="firma_adi" class="form-control border-0 bg-light p-3" required>

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash
 from sqlalchemy import or_
 from models import db, Musteri, IsKaydi, Odeme, BankaKasa
 from utils import GUNCEL_KURLAR, pdf_olustur
@@ -230,7 +230,7 @@ def musteri_odeme_ekle(m_id):
         tutar=round(float(request.form.get('tutar') or 0), 2), 
         birim=birim, 
         aciklama=request.form.get('aciklama'), 
-        odeme_yontemi=request.form.get('odeme_yontemi'),
+        odeme_yontemi=request.form.get('odeme_yontemi') or 'Havale/EFT',
         banka_kasa_id=request.form.get('banka_kasa_id'),
         kur_degeri=kur, 
         is_kaydi_id=request.form.get('is_id'),
@@ -238,6 +238,7 @@ def musteri_odeme_ekle(m_id):
     )
     db.session.add(yeni_odeme)
     db.session.commit()
+    flash('Tahsilat kaydedildi.', 'success')
     return redirect(request.referrer or url_for('musteri.musteri_detay', id=m_id))
 
 @musteri_bp.route('/odeme_sil/<int:id>', methods=['POST'])
@@ -248,6 +249,7 @@ def odeme_sil(id):
     m_id = o.musteri_id
     db.session.delete(o)
     db.session.commit()
+    flash('Tahsilat silindi.', 'warning')
     return redirect(url_for('musteri.musteri_detay', id=m_id))
 
 @musteri_bp.route('/pdf_indir/<int:id>')

@@ -28,6 +28,7 @@
 
         <div class="collapse mb-3" id="hedefForm">
             <form action="{{ url_for('genel.hedef_guncelle') }}" method="POST" class="d-flex gap-2">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="number" name="yeni_hedef" class="form-control form-control-sm border-0 bg-light" placeholder="Yeni hedefi girin..." required>
                 <button type="submit" class="btn btn-sm btn-primary px-3">Güncelle</button>
             </form>
@@ -65,7 +66,7 @@
             </div>
         </div>
         <div class="col-md-3 col-6">
-            <div class="card card-custom p-4 border-0 h-100 shadow-sm text-center" style="background-color: #f1f8e9;">
+            <div class="card card-custom h-100 border-0 shadow-sm text-center" style="background-color: #f1f8e9;">
                 <div class="text-uppercase small fw-bold text-success mb-2">TAHMİNİ KÂR</div>
                 <div class="h3 fw-bold text-success mb-0">{{ "{:,.0f}".format(kar) }} ₺</div>
                 <div class="small text-success mt-1">İşler - (Alım + Gider)</div>
@@ -107,6 +108,7 @@
             <div class="modal-body p-4">
                 <h5 class="fw-bold mb-4 text-center">HIZLI TAHSİLAT</h5>
                 <form action="{{ url_for('musteri.musteri_odeme_ekle', m_id=0) }}" id="tahsilatForm" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label class="small fw-bold">MÜŞTERİ</label>
                         <select name="musteri_id_hizli" class="form-select bg-light border-0 p-3" onchange="document.getElementById('tahsilatForm').action='{{ url_for('musteri.musteri_odeme_ekle', m_id=0) }}'.replace('/0','/'+this.value)" required>
@@ -149,10 +151,29 @@
             <div class="modal-body p-4">
                 <h5 class="fw-bold mb-4 text-center">HIZLI GİDER KAYDI</h5>
                 <form action="{{ url_for('gider.gider_ekle') }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label class="small fw-bold">KATEGORİ</label>
                         <select name="kategori" class="form-select bg-light border-0 p-3" required>
-                            <option value="Kira">Kira</option><option value="Personel">Personel</option><option value="Enerji">Enerji</option><option value="Diğer">Diğer</option>
+                            <option value="Kira">Kira</option>
+                            <option value="Personel">Personel</option>
+                            <option value="Maaş">Maaş</option>
+                            <option value="SGK">SGK</option>
+                            <option value="Vergi">Vergi</option>
+                            <option value="Enerji">Enerji</option>
+                            <option value="Elektrik">Elektrik</option>
+                            <option value="Su">Su</option>
+                            <option value="İnternet">İnternet</option>
+                            <option value="Telefon">Telefon</option>
+                            <option value="Yakıt">Yakıt</option>
+                            <option value="Bakım">Bakım</option>
+                            <option value="Tamir">Tamir</option>
+                            <option value="Kargo">Kargo</option>
+                            <option value="Ofis">Ofis</option>
+                            <option value="Pazarlama">Pazarlama</option>
+                            <option value="Reklam">Reklam</option>
+                            <option value="Malzeme">Malzeme</option>
+                            <option value="Diğer">Diğer</option>
                         </select>
                     </div>
                     <div class="row">
@@ -167,6 +188,12 @@
                             </select>
                         </div>
                     </div>
+
+                    <div class="mb-3">
+                        <label class="small fw-bold">AÇIKLAMA / NOT</label>
+                        <input type="text" name="aciklama" class="form-control bg-light border-0 p-3" placeholder="Örn: Elektrik faturası (Ocak)" required>
+                    </div>
+
                     <div class="mb-4">
                         <label class="small fw-bold">HESAP</label>
                         <select name="banka_kasa_id" class="form-select bg-light border-0 p-3" required>
