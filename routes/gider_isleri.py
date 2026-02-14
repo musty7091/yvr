@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
+from sqlalchemy import extract, func
 from models import db, Gider, BankaKasa
 from utils import GUNCEL_KURLAR
 from datetime import datetime
@@ -10,22 +11,32 @@ def giderler():
     if 'logged_in' not in session:
         return redirect(url_for('genel.index'))
 
-    # Tüm giderleri tarihe göre en yeni üstte olacak şekilde çekiyoruz
-    gider_listesi = Gider.query.order_by(Gider.tarih.desc()).all()
+    # --- PAGINATION ---
+    page = request.args.get('page', 1, type=int)
+    per_page = 25  # istersen 15/20/50 yaparız
 
-    # Bu ayki toplam gideri döviz kurlarını TL'ye çevirerek hesapla
-    bu_ay = datetime.now()
-    bu_ay_toplam = sum(
-        (g.tutar * g.kur_degeri) for g in gider_listesi
-        if g.tarih and g.tarih.month == bu_ay.month and g.tarih.year == bu_ay.year
+    pagination = (
+        Gider.query
+        .order_by(Gider.tarih.desc())
+        .paginate(page=page, per_page=per_page, error_out=False)
     )
+
+    # Bu ayki toplam gider (sayfaya bağlı olmasın diye SQL ile hesapla)
+    bu_ay = datetime.now()
+    bu_ay_toplam = db.session.query(
+        func.coalesce(func.sum(Gider.tutar * Gider.kur_degeri), 0.0)
+    ).filter(
+        extract('month', Gider.tarih) == bu_ay.month,
+        extract('year', Gider.tarih) == bu_ay.year
+    ).scalar() or 0.0
 
     kasalar = BankaKasa.query.all()
 
     return render_template(
         'giderler.html',
-        giderler=gider_listesi,
-        bu_ay_toplam=round(bu_ay_toplam, 2),
+        giderler=pagination.items,   # template geriye dönük uyum
+        pagination=pagination,       # template pagination bar için
+        bu_ay_toplam=round(float(bu_ay_toplam), 2),
         kurlar=GUNCEL_KURLAR,
         kasalar=kasalar
     )
@@ -45,10 +56,10 @@ def gider_ekle():
     except ValueError:
         tutar = 0
 
-    # Basit güvenlik: 0 veya negatif gider kaydı eklemeyelim (yanlışlıkla boş gönderim çok oluyor)
+    # Basit güvenlik: 0 veya negatif gider kaydı eklemeyelim
     if tutar <= 0:
         flash('Gider tutarı 0 olamaz. Lütfen tutar girin.', 'warning')
-        return redirect(request.referrer or url_for('genel.index'))
+        return redirect(request.referrer or url_for('gider.giderler'))
 
     islem_kuru = GUNCEL_KURLAR.get(birim, 1.0) if birim != 'TL' else 1.0
 

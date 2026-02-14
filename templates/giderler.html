@@ -35,6 +35,10 @@
     </div>
 </div>
 
+{# Pagination gelmeden kırılmaması için fallback #}
+{% set pager = pagination if pagination is defined else None %}
+{% set giderler_list = pager.items if pager else giderler %}
+
 <div class="card card-custom p-0 overflow-hidden shadow-sm border-0">
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
@@ -49,7 +53,7 @@
                 </tr>
             </thead>
             <tbody>
-                {% for g in giderler %}
+                {% for g in giderler_list %}
                 <tr>
                     <td class="ps-4 text-muted small">
                         {{ g.tarih.strftime('%d.%m.%Y') }}
@@ -86,7 +90,7 @@
                     </td>
                 </tr>
                 {% endfor %}
-                {% if not giderler %}
+                {% if not giderler_list %}
                 <tr>
                     <td colspan="6" class="text-center py-5 text-muted small">Kayıtlı gider bulunmamaktadır.</td>
                 </tr>
@@ -95,6 +99,54 @@
         </table>
     </div>
 </div>
+
+{# Pagination bar (route paginate etmeye başlayınca aktif olacak) #}
+{% if pager %}
+<nav class="mt-4 d-flex justify-content-center" aria-label="Giderler Sayfalama">
+    <ul class="pagination pagination-sm mb-0">
+
+        <li class="page-item {% if not pager.has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('gider.giderler', page=pager.prev_num) if pager.has_prev else '#' }}" aria-label="Önceki">
+                <span aria-hidden="true">&laquo;</span>
+            </a>
+        </li>
+
+        {# Sayfa numaraları: çok uzamasın diye pencere mantığı #}
+        {% set start = pager.page - 2 %}
+        {% set end = pager.page + 2 %}
+        {% if start < 1 %}{% set start = 1 %}{% endif %}
+        {% if end > pager.pages %}{% set end = pager.pages %}{% endif %}
+
+        {% for p in range(start, end + 1) %}
+        <li class="page-item {% if p == pager.page %}active{% endif %}">
+            <a class="page-link" href="{{ url_for('gider.giderler', page=p) }}">{{ p }}</a>
+        </li>
+        {% endfor %}
+
+        <li class="page-item {% if not pager.has_next %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('gider.giderler', page=pager.next_num) if pager.has_next else '#' }}" aria-label="Sonraki">
+                <span aria-hidden="true">&raquo;</span>
+            </a>
+        </li>
+
+    </ul>
+</nav>
+
+<style>
+/* Turuncu tema ile uyumlu active */
+.pagination .page-item.active .page-link{
+    background-color:#ef6c00 !important;
+    border-color:#ef6c00 !important;
+    color:#fff !important;
+}
+.pagination .page-link{
+    color:#ef6c00;
+}
+.pagination .page-link:hover{
+    color:#ef6c00;
+}
+</style>
+{% endif %}
 
 <div class="modal fade" id="giderEkleModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
