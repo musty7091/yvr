@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from flask_wtf.csrf import CSRFProtect
 from flask import Flask
 from dotenv import load_dotenv
@@ -17,9 +18,18 @@ def _env_bool(name: str, default: bool = False) -> bool:
         return default
     return v.strip().lower() in ("1", "true", "yes", "on")
 
+def _env_int(name: str, default: int) -> int:
+    v = os.getenv(name)
+    if v is None or str(v).strip() == "":
+        return default
+    try:
+        return int(str(v).strip())
+    except Exception:
+        return default
+
+
 app = Flask(__name__)
 csrf = CSRFProtect(app)
-
 
 # --- GÜVENLİK ---
 secret = os.getenv("SECRET_KEY")
@@ -28,10 +38,14 @@ if not secret:
 app.secret_key = secret
 
 # Cookie güvenlik ayarları (prod için önemli)
-app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-# HTTPS kullanıyorsan prod’da True yap (lokalde False kalabilir)
-app.config["SESSION_COOKIE_SECURE"] = _env_bool("SESSION_COOKIE_SECURE", False)
+app.config["SESSION_COOKIE_HTTPONLY"] = _env_bool("SESSION_COOKIE_HTTPONLY", True)
+app.config["SESSION_COOKIE_SAMESITE"] = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
+# HTTPS kullanıyorsan prod’da True olmalı (PythonAnywhere'de True)
+app.config["SESSION_COOKIE_SECURE"] = _env_bool("SESSION_COOKIE_SECURE", True)
+
+# Oturum süresi (saat)
+session_hours = _env_int("SESSION_LIFETIME_HOURS", 12)
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=session_hours)
 
 # --- VERİTABANI AYARLARI ---
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -51,7 +65,7 @@ else:
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + db_path
 
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-# ----------------------------------
+app.config["SQLALCHEMY_ECHO"] = _env_bool("SQLALCHEMY_ECHO", False)
 
 db.init_app(app)
 
@@ -72,10 +86,15 @@ def bootstrap_db(app):
         db.create_all()
 
         # 2) Admin kullanıcı (yoksa)
-        admin = Kullanici.query.filter_by(kullanici_adi="admin").first()
+        admin_username = (os.getenv("ADMIN_USERNAME") or "admin").strip()
+        admin_password = os.getenv("ADMIN_PASSWORD")
+
+        if not admin_password:
+            raise RuntimeError("AUTO_CREATE_DB=1 iken ADMIN_PASSWORD zorunlu (default şifre yok).")
+
+        admin = Kullanici.query.filter_by(kullanici_adi=admin_username).first()
         if not admin:
-            admin = Kullanici(kullanici_adi="admin")
-            admin_password = os.getenv("ADMIN_PASSWORD", "1234")
+            admin = Kullanici(kullanici_adi=admin_username)
             admin.sifre_belirle(admin_password)
             db.session.add(admin)
 
@@ -102,4 +121,5 @@ app.register_blueprint(gider_bp, url_prefix="/gider")
 
 if __name__ == "__main__":
     debug = _env_bool("DEBUG", False)
+    # Prod’da debug False olmalı
     app.run(debug=debug, port=5000)

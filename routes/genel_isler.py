@@ -6,7 +6,7 @@ from models import (
     money, rate, normalize_currency
 )
 from utils import GUNCEL_KURLAR, kurlari_sabitle
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -14,11 +14,13 @@ from email.mime.base import MIMEBase
 from email import encoders
 import os
 
+
 genel_bp = Blueprint('genel', __name__)
+
 
 @genel_bp.route('/')
 def index():
-    if 'logged_in' not in session:
+    if not session.get('logged_in'):
         return render_template('giris.html')
 
     bugun = datetime.now()
@@ -106,9 +108,10 @@ def index():
         kasalar=kasalar
     )
 
+
 @genel_bp.route('/ayarlar', methods=['GET', 'POST'])
 def ayarlar():
-    if 'logged_in' not in session:
+    if not session.get('logged_in'):
         return redirect(url_for('genel.index'))
 
     kullanici = Kullanici.query.filter_by(kullanici_adi='admin').first()
@@ -149,9 +152,10 @@ def ayarlar():
 
     return render_template('ayarlar.html', kullanici=kullanici, ayar=ayar, kasalar=kasalar)
 
+
 @genel_bp.route('/kasa_banka_yonetimi')
 def kasa_banka_yonetimi():
-    if 'logged_in' not in session:
+    if not session.get('logged_in'):
         return redirect(url_for('genel.index'))
 
     db.session.expire_all()
@@ -199,9 +203,10 @@ def kasa_banka_yonetimi():
 
     return render_template('kasa_yonetimi.html', kasalar=kasa_ozetleri)
 
+
 @genel_bp.route('/transfer_yap', methods=['POST'])
 def transfer_yap():
-    if 'logged_in' not in session:
+    if not session.get('logged_in'):
         return redirect(url_for('genel.index'))
 
     tutar = money(request.form.get('tutar'))
@@ -223,9 +228,10 @@ def transfer_yap():
     flash('Transfer kaydedildi.', 'success')
     return redirect(url_for('genel.kasa_banka_yonetimi'))
 
+
 @genel_bp.route('/kasa_banka_ekle', methods=['POST'])
 def kasa_banka_ekle():
-    if 'logged_in' not in session:
+    if not session.get('logged_in'):
         return redirect(url_for('genel.index'))
 
     yeni_kasa = BankaKasa(
@@ -238,9 +244,10 @@ def kasa_banka_ekle():
     flash('Kasa/Banka eklendi.', 'success')
     return redirect(url_for('genel.kasa_banka_yonetimi'))
 
+
 @genel_bp.route('/kasa_banka_sil/<int:id>', methods=['POST'])
 def kasa_banka_sil(id):
-    if 'logged_in' not in session:
+    if not session.get('logged_in'):
         return redirect(url_for('genel.index'))
 
     kasa = BankaKasa.query.get_or_404(id)
@@ -249,9 +256,10 @@ def kasa_banka_sil(id):
     flash('Kasa/Banka silindi.', 'warning')
     return redirect(url_for('genel.kasa_banka_yonetimi'))
 
+
 @genel_bp.route('/hedef_guncelle', methods=['POST'])
 def hedef_guncelle():
-    if 'logged_in' not in session:
+    if not session.get('logged_in'):
         return redirect(url_for('genel.index'))
 
     ayar = Ayarlar.query.first()
@@ -261,38 +269,67 @@ def hedef_guncelle():
         flash('Hedef güncellendi.', 'success')
     return redirect(url_for('genel.index'))
 
+
 @genel_bp.route('/login', methods=['POST'])
 def login():
-    k_adi = request.form.get('username')
-    sifre = request.form.get('password')
+    k_adi = (request.form.get('username') or '').strip()
+    sifre = request.form.get('password') or ''
+
+    # --- Basit brute-force koruması (session bazlı) ---
+    lock_until = session.get("lock_until")
+    if lock_until:
+        try:
+            lock_until_dt = datetime.fromisoformat(lock_until)
+        except Exception:
+            # Bozuk state -> temizle
+            session.pop("lock_until", None)
+            session.pop("fail_count", None)
+            lock_until_dt = None
+
+        if lock_until_dt and datetime.utcnow() < lock_until_dt:
+            flash('Çok fazla deneme. Lütfen biraz sonra tekrar deneyin.', 'danger')
+            return redirect(url_for('genel.index'))
+        else:
+            session.pop("lock_until", None)
+            session.pop("fail_count", None)
 
     kullanici = Kullanici.query.filter_by(kullanici_adi=k_adi).first()
 
     if kullanici and kullanici.sifre_kontrol(sifre):
+        session.clear()
         session.permanent = True
         session['logged_in'] = True
+        session['user_id'] = kullanici.id
         return redirect(url_for('genel.index'))
-    else:
-        flash('Geçersiz kullanıcı adı veya şifre!', 'danger')
-        return redirect(url_for('genel.index'))
+
+    fail = int(session.get("fail_count", 0)) + 1
+    session["fail_count"] = fail
+    if fail >= 5:
+        session["lock_until"] = (datetime.utcnow() + timedelta(minutes=10)).isoformat()
+
+    flash('Geçersiz kullanıcı adı veya şifre!', 'danger')
+    return redirect(url_for('genel.index'))
+
 
 @genel_bp.route('/logout')
 def logout():
-    session.pop('logged_in', None)
+    session.clear()
     return redirect(url_for('genel.index'))
+
 
 @genel_bp.route('/kurlari_guncelle')
 def kurlari_guncelle():
-    if 'logged_in' not in session:
+    if not session.get('logged_in'):
         return redirect(url_for('genel.index'))
 
     kurlari_sabitle()
     flash('Kurlar güncellendi.', 'success')
     return redirect(request.referrer or url_for('genel.index'))
 
+
 @genel_bp.route('/yedekle_ve_mail_at')
 def yedekle_ve_mail_at():
-    if 'logged_in' not in session:
+    if not session.get('logged_in'):
         return redirect(url_for('genel.index'))
 
     db_uri = (os.getenv("DATABASE_URL") or "").lower()
