@@ -4,12 +4,24 @@ from models import db, Musteri, IsKaydi, Odeme, BankaKasa
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-# ImportError fix: money/rate utils.py içinde yoksa models.py'den al
+# ImportError fix: money/rate/normalize_currency utils.py içinde yoksa models.py'den al
 try:
     from utils import GUNCEL_KURLAR, pdf_olustur, money, rate
 except ImportError:
     from utils import GUNCEL_KURLAR, pdf_olustur
     from models import money, rate
+
+# normalize_currency kesin lazım (TRY standardı için)
+try:
+    from models import normalize_currency
+except ImportError:
+    # Eğer bir sebeple models'te yoksa, "minimal" fallback:
+    def normalize_currency(v: str) -> str:
+        s = (v or "").strip().upper()
+        if s in ("TL", "₺", "TRY", ""):
+            return "TRY"
+        return s
+
 
 musteri_bp = Blueprint('musteri', __name__)
 
@@ -20,7 +32,7 @@ def satislar():
 
     aktif_musteriler = Musteri.query.filter_by(durum='Aktif').all()
 
-    toplam_alacak_tl = Decimal("0")
+    toplam_alacak_try = Decimal("0")
     devam_eden_is_sayisi = 0
 
     for m in aktif_musteriler:
@@ -28,11 +40,12 @@ def satislar():
             if i.durum == 'Devam Ediyor':
                 devam_eden_is_sayisi += 1
 
-            kur = rate(GUNCEL_KURLAR.get(i.para_birimi, 1))
-            toplam_alacak_tl += (i.toplam_bedel * kur)
+            pb = normalize_currency(i.para_birimi)
+            kur = rate(GUNCEL_KURLAR.get(pb, 1)) if pb != "TRY" else rate(1)
+            toplam_alacak_try += (i.toplam_bedel * kur)
 
         for o in m.odemeler:
-            toplam_alacak_tl -= (o.tutar * o.kur_degeri)
+            toplam_alacak_try -= (o.tutar * o.kur_degeri)
 
     yaklasan_isler = (
         IsKaydi.query
@@ -50,7 +63,7 @@ def satislar():
 
     return render_template(
         'satislar.html',
-        alacak=str(money(toplam_alacak_tl)),
+        alacak=str(money(toplam_alacak_try)),
         is_sayisi=devam_eden_is_sayisi,
         yaklasan_isler=yaklasan_isler,
         kurlar=GUNCEL_KURLAR,
@@ -100,6 +113,9 @@ def musteriler():
 
 @musteri_bp.route('/musteri_ekle', methods=['POST'])
 def musteri_ekle():
+    if 'logged_in' not in session:
+        return redirect(url_for('genel.index'))
+
     db.session.add(Musteri(
         ad_soyad=request.form.get('ad_soyad'),
         telefon=request.form.get('telefon'),
@@ -118,20 +134,21 @@ def musteri_detay(id):
     m = Musteri.query.get_or_404(id)
     kasalar = BankaKasa.query.all()
 
-    net_tl = Decimal("0")
+    net_try = Decimal("0")
     for i in m.isler:
-        kur = rate(GUNCEL_KURLAR.get(i.para_birimi, 1))
-        net_tl += (i.toplam_bedel * kur)
+        pb = normalize_currency(i.para_birimi)
+        kur = rate(GUNCEL_KURLAR.get(pb, 1)) if pb != "TRY" else rate(1)
+        net_try += (i.toplam_bedel * kur)
     for o in m.odemeler:
-        net_tl -= (o.tutar * o.kur_degeri)
+        net_try -= (o.tutar * o.kur_degeri)
 
     usd_kur = rate(GUNCEL_KURLAR.get('USD', 1))
 
     return render_template(
         'musteri_detay.html',
         musteri=m,
-        toplam_tl=str(money(net_tl)),
-        toplam_usd=str(money(net_tl / usd_kur)) if usd_kur != 0 else "0.00",
+        toplam_tl=str(money(net_try)),  # template uyumu için alan adı aynı kaldı
+        toplam_usd=str(money(net_try / usd_kur)) if usd_kur != 0 else "0.00",
         kurlar=GUNCEL_KURLAR,
         kasalar=kasalar
     )
@@ -198,11 +215,14 @@ def is_ekle():
 
 @musteri_bp.route('/is_kaydet', methods=['POST'])
 def is_kaydet():
+    if 'logged_in' not in session:
+        return redirect(url_for('genel.index'))
+
     m_id = int(request.form.get('musteri_id'))
     is_adi = request.form.get('is_tanimi')
 
     t_bedel = money(request.form.get('toplam_bedel'))
-    p_birimi = request.form.get('para_birimi') or 'TL'
+    p_birimi = normalize_currency(request.form.get('para_birimi') or 'TRY')
 
     v_gun = int(request.form.get('vade_gun') or 0)
     kasa_id = request.form.get('banka_kasa_id')
@@ -222,8 +242,8 @@ def is_kaydet():
 
     a_kapora = money(request.form.get('alinan_kapora'))
     if a_kapora > 0:
-        k_birimi = request.form.get('kapora_birimi') or 'TL'
-        kapora_kur = rate(GUNCEL_KURLAR.get(k_birimi, 1)) if k_birimi != 'TL' else rate(1)
+        k_birimi = normalize_currency(request.form.get('kapora_birimi') or 'TRY')
+        kapora_kur = rate(GUNCEL_KURLAR.get(k_birimi, 1)) if k_birimi != 'TRY' else rate(1)
 
         db.session.add(Odeme(
             tutar=a_kapora,
@@ -274,11 +294,14 @@ def is_sil(id):
 
 @musteri_bp.route('/musteri_odeme_ekle/<int:m_id>', methods=['POST'])
 def musteri_odeme_ekle(m_id):
+    if 'logged_in' not in session:
+        return redirect(url_for('genel.index'))
+
     if m_id == 0:
         m_id = int(request.form.get('musteri_id_hizli'))
 
-    birim = request.form.get('birim') or 'TL'
-    kur = rate(GUNCEL_KURLAR.get(birim, 1)) if birim != 'TL' else rate(1)
+    birim = normalize_currency(request.form.get('birim') or 'TRY')
+    kur = rate(GUNCEL_KURLAR.get(birim, 1)) if birim != 'TRY' else rate(1)
 
     is_id_raw = request.form.get('is_id')
     is_id = int(is_id_raw) if (is_id_raw and str(is_id_raw).isdigit()) else None
@@ -314,16 +337,20 @@ def odeme_sil(id):
 
 @musteri_bp.route('/pdf_indir/<int:id>')
 def pdf_indir(id):
+    if 'logged_in' not in session:
+        return redirect(url_for('genel.index'))
+
     m = Musteri.query.get_or_404(id)
 
-    net_tl = Decimal("0")
+    net_try = Decimal("0")
     for i in m.isler:
-        kur = rate(GUNCEL_KURLAR.get(i.para_birimi, 1))
-        net_tl += (i.toplam_bedel * kur)
+        pb = normalize_currency(i.para_birimi)
+        kur = rate(GUNCEL_KURLAR.get(pb, 1)) if pb != "TRY" else rate(1)
+        net_try += (i.toplam_bedel * kur)
     for o in m.odemeler:
-        net_tl -= (o.tutar * o.kur_degeri)
+        net_try -= (o.tutar * o.kur_degeri)
 
     usd_kur = rate(GUNCEL_KURLAR.get('USD', 1))
-    net_usd = (net_tl / usd_kur) if usd_kur != 0 else Decimal("0")
+    net_usd = (net_try / usd_kur) if usd_kur != 0 else Decimal("0")
 
-    return pdf_olustur(m, money(net_tl), money(net_usd))
+    return pdf_olustur(m, money(net_try), money(net_usd))

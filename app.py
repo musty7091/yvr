@@ -33,7 +33,7 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 # HTTPS kullanıyorsan prod’da True yap (lokalde False kalabilir)
 app.config["SESSION_COOKIE_SECURE"] = _env_bool("SESSION_COOKIE_SECURE", False)
 
-# --- VERİTABANI YOLU DÜZELTMESİ ---
+# --- VERİTABANI AYARLARI ---
 basedir = os.path.abspath(os.path.dirname(__file__))
 instance_path = os.path.join(basedir, "instance")
 
@@ -41,11 +41,58 @@ if not os.path.exists(instance_path):
     os.makedirs(instance_path)
 
 db_path = os.path.join(instance_path, "yvr_veritabani.db")
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + db_path
+
+# Öncelik: PostgreSQL (DATABASE_URL varsa)
+database_url = os.getenv("DATABASE_URL")
+if database_url:
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+else:
+    # Fallback: SQLite (lokal/test için)
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + db_path
+
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 # ----------------------------------
 
 db.init_app(app)
+
+# --- İLK ÇALIŞTIRMA: DB OLUŞTUR + MINIMUM KAYITLAR ---
+from models import Kullanici, Ayarlar, BankaKasa, money
+
+def bootstrap_db(app):
+    """
+    İlk çalıştırmada tabloları oluşturur ve minimum gerekli kayıtları (admin/ayarlar/kasa) ekler.
+    Sadece AUTO_CREATE_DB=1 ise çalışır.
+    """
+    auto = _env_bool("AUTO_CREATE_DB", False)
+    if not auto:
+        return
+
+    with app.app_context():
+        # 1) Tablolar
+        db.create_all()
+
+        # 2) Admin kullanıcı (yoksa)
+        admin = Kullanici.query.filter_by(kullanici_adi="admin").first()
+        if not admin:
+            admin = Kullanici(kullanici_adi="admin")
+            admin_password = os.getenv("ADMIN_PASSWORD", "1234")
+            admin.sifre_belirle(admin_password)
+            db.session.add(admin)
+
+        # 3) Ayarlar (yoksa)
+        if not Ayarlar.query.first():
+            default_target = os.getenv("DEFAULT_MONTH_TARGET", "50000")
+            db.session.add(Ayarlar(ay_hedefi=money(default_target)))
+
+        # 4) Varsayılan kasalar (hiç yoksa)
+        if BankaKasa.query.count() == 0:
+            db.session.add(BankaKasa(ad="Dükkan Kasa", tur="Nakit", hesap_no="NAKIT", baslangic_bakiye=money("0")))
+            db.session.add(BankaKasa(ad="Ziraat Bankası", tur="Banka", hesap_no="TR01", baslangic_bakiye=money("0")))
+
+        db.session.commit()
+
+bootstrap_db(app)
+# -----------------------------------------------------
 
 # Blueprint Kayıtları
 app.register_blueprint(genel_bp)

@@ -3,7 +3,7 @@ from sqlalchemy import extract, func
 from models import (
     db, IsKaydi, SatinAlma, Gider, Ayarlar, BankaKasa, Transfer,
     Kullanici, Odeme, TedarikciOdeme, Musteri,
-    money, rate
+    money, rate, normalize_currency
 )
 from utils import GUNCEL_KURLAR, kurlari_sabitle
 from datetime import datetime
@@ -38,7 +38,8 @@ def index():
     ).all()
 
     for i in isler:
-        kur = rate(GUNCEL_KURLAR.get(i.para_birimi, 1))
+        pb = normalize_currency(i.para_birimi)
+        kur = rate(GUNCEL_KURLAR.get(pb, 1))
         aylik_is_hacmi += (i.toplam_bedel * kur)
 
     # 2) Aylık Ticari Alımlar - Decimal
@@ -49,12 +50,13 @@ def index():
     ).all()
 
     for s in satin_almalar:
-        kur = rate(GUNCEL_KURLAR.get(s.para_birimi, 1))
+        pb = normalize_currency(s.para_birimi)
+        kur = rate(GUNCEL_KURLAR.get(pb, 1))
         aylik_satinalma += (s.tutar * kur)
 
-    # 3) Aylık İşletme Giderleri - SQL SUM dönerken float gelebilir, Decimal’a çeviriyoruz
+    # 3) Aylık İşletme Giderleri - SQL SUM dönüşü Numeric/Decimal olabilir; money() ile normalize ediyoruz
     aylik_gider_sorgu = db.session.query(
-        func.coalesce(func.sum(Gider.tutar * Gider.kur_degeri), 0)
+        func.coalesce(func.sum(Gider.tutar * Gider.kur_degeri), Decimal("0"))
     ).filter(
         extract('month', Gider.tarih) == bu_ay,
         extract('year', Gider.tarih) == bu_yil
@@ -68,7 +70,7 @@ def index():
     # 5) Hedef
     ayar = Ayarlar.query.first()
     if not ayar:
-        ayar = Ayarlar(ay_hedefi=50000.0)
+        ayar = Ayarlar(ay_hedefi=money("50000"))
         db.session.add(ayar)
         db.session.commit()
 
@@ -94,7 +96,7 @@ def index():
         kar=float(money(kar)),
         alarm_listesi=alarm_listesi,
         hedef_yuzde=float(hedef_yuzde),
-        aylik_hedef=float(money(aylik_hedef)),
+        aylik_hedef=float(aylik_hedef),
         kurlar=GUNCEL_KURLAR,
         musteriler=musteriler,
         kasalar=kasalar
@@ -116,7 +118,7 @@ def ayarlar():
             mevcut_sifre = request.form.get('mevcut_sifre')
             yeni_sifre = request.form.get('yeni_sifre')
 
-            if kullanici.sifre_kontrol(mevcut_sifre):
+            if kullanici and kullanici.sifre_kontrol(mevcut_sifre):
                 kullanici.sifre_belirle(yeni_sifre)
                 db.session.commit()
                 flash('Şifreniz başarıyla güncellendi.', 'success')
@@ -126,8 +128,7 @@ def ayarlar():
         elif islem == 'hedef_guncelle':
             yeni_hedef = money(request.form.get('yeni_hedef'))
             if ayar:
-                # DB Float ise Decimal -> float kaydedeceğiz (şimdilik)
-                ayar.ay_hedefi = float(yeni_hedef)
+                ayar.ay_hedefi = yeni_hedef
                 db.session.commit()
                 flash('Aylık hedef başarıyla güncellendi.', 'success')
 
@@ -136,7 +137,7 @@ def ayarlar():
             yeni_baslangic = money(request.form.get('baslangic_tutar'))
             kasa = BankaKasa.query.get(kasa_id)
             if kasa:
-                kasa.baslangic_bakiye = float(yeni_baslangic)  # DB Float ise şimdilik böyle
+                kasa.baslangic_bakiye = yeni_baslangic
                 db.session.commit()
                 flash(f'{kasa.ad} başlangıç bakiyesi güncellendi.', 'success')
 
@@ -155,30 +156,28 @@ def kasa_banka_yonetimi():
     kasa_ozetleri = []
 
     for k in kasalar:
-        # Not: DB Float sütunları var. SUM sonuçları float gelebilir -> money() ile Decimal’a çeviriyoruz.
-
         toplam_gelir = db.session.query(
-            func.coalesce(func.sum(Odeme.tutar * func.coalesce(Odeme.kur_degeri, 1.0)), 0.0)
+            func.coalesce(func.sum(Odeme.tutar * func.coalesce(Odeme.kur_degeri, Decimal("1"))), Decimal("0"))
         ).filter(Odeme.banka_kasa_id == k.id).scalar()
         toplam_gelir = money(toplam_gelir)
 
         toplam_gider = db.session.query(
-            func.coalesce(func.sum(Gider.tutar * Gider.kur_degeri), 0.0)
+            func.coalesce(func.sum(Gider.tutar * Gider.kur_degeri), Decimal("0"))
         ).filter(Gider.banka_kasa_id == k.id).scalar()
         toplam_gider = money(toplam_gider)
 
         toplam_tedarikci = db.session.query(
-            func.coalesce(func.sum(TedarikciOdeme.tutar * TedarikciOdeme.kur_degeri), 0.0)
+            func.coalesce(func.sum(TedarikciOdeme.tutar * TedarikciOdeme.kur_degeri), Decimal("0"))
         ).filter(TedarikciOdeme.banka_kasa_id == k.id).scalar()
         toplam_tedarikci = money(toplam_tedarikci)
 
         gelen_transfer = db.session.query(
-            func.coalesce(func.sum(Transfer.tutar), 0.0)
+            func.coalesce(func.sum(Transfer.tutar), Decimal("0"))
         ).filter_by(hedef_hesap_id=k.id).scalar()
         gelen_transfer = money(gelen_transfer)
 
         giden_transfer = db.session.query(
-            func.coalesce(func.sum(Transfer.tutar), 0.0)
+            func.coalesce(func.sum(Transfer.tutar), Decimal("0"))
         ).filter_by(kaynak_hesap_id=k.id).scalar()
         giden_transfer = money(giden_transfer)
 
@@ -210,7 +209,7 @@ def transfer_yap():
         return redirect(url_for('genel.kasa_banka_yonetimi'))
 
     yeni_transfer = Transfer(
-        tutar=float(tutar),  # DB Float ise şimdilik böyle; model DECIMAL'a geçince direkt Decimal olacak
+        tutar=tutar,
         kaynak_hesap_id=kaynak_id,
         hedef_hesap_id=hedef_id,
         aciklama=request.form.get('aciklama')
@@ -253,7 +252,7 @@ def hedef_guncelle():
 
     ayar = Ayarlar.query.first()
     if ayar:
-        ayar.ay_hedefi = float(money(request.form.get('yeni_hedef')))
+        ayar.ay_hedefi = money(request.form.get('yeni_hedef'))
         db.session.commit()
         flash('Hedef güncellendi.', 'success')
     return redirect(url_for('genel.index'))
@@ -291,6 +290,14 @@ def kurlari_guncelle():
 def yedekle_ve_mail_at():
     if 'logged_in' not in session:
         return redirect(url_for('genel.index'))
+
+    # SQLite dosyası yedekleme mantığı Postgres'te geçerli değil.
+    # Postgres kullanırken güvenli yöntem pg_dump ile dump almaktır.
+    # Bu route yanlış bir güven duygusu yaratmasın diye uyarıyoruz.
+    db_uri = (os.getenv("DATABASE_URL") or "").lower()
+    if "postgres" in db_uri:
+        flash('PostgreSQL kullanıyorsun. Yedekleme için pg_dump ile dump alınmalı (bu ekrandaki SQLite yedeği geçerli değil).', 'warning')
+        return redirect(url_for('genel.ayarlar'))
 
     basedir = os.path.abspath(os.path.dirname(__file__))
     db_path = os.path.join(os.path.dirname(basedir), 'instance', 'yvr_veritabani.db')
