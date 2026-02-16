@@ -34,8 +34,8 @@
     <div class="col-12">
         <div class="card card-custom text-center border-0 shadow-sm" style="background: #fdfdfd; border-left: 5px solid #a2d2ff !important;">
             <div class="text-uppercase small fw-medium text-muted mb-1">GÜNCEL TOPLAM BAKİYE</div>
-            <div class="h2 mb-0" style="color: #4a4a4a;">{{ "{:,.2f}".format(toplam_tl) }} ₺</div>
-            <div class="small text-secondary">{{ "{:,.2f}".format(toplam_usd) }} USD</div>
+            <div class="h2 mb-0" style="color: #4a4a4a;">{{ "{:,.2f}".format(toplam_tl|float) }} ₺</div>
+            <div class="small text-secondary">{{ "{:,.2f}".format(toplam_usd|float) }} USD</div>
         </div>
     </div>
 
@@ -60,7 +60,7 @@
                         </td>
                         <td class="text-end pe-4">
                             <div class="d-flex justify-content-end align-items-center gap-3">
-                                <span class="fw-medium">{{ "{:,.2f}".format(is.toplam_bedel) }} {{ is.para_birimi }}</span>
+                                <span class="fw-medium">{{ "{:,.2f}".format(is.toplam_bedel|float) }} {{ is.para_birimi }}</span>
                                 
                                 {% if is.durum == 'Devam Ediyor' %}
                                     <a href="{{ url_for('musteri.is_teslim_et', id=is.id) }}" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1" style="font-size: 0.75rem;">
@@ -117,7 +117,7 @@
                             {% if o.birim != 'TL' %}<div style="font-size: 0.65rem;" class="text-muted">Kur: {{ o.kur_degeri }}</div>{% endif %}
                         </td>
                         <td class="text-end pe-4">
-                            <span class="text-success small fw-medium me-3">+ {{ "{:,.2f}".format(o.tutar) }} {{ o.birim }}</span>
+                            <span class="text-success small fw-medium me-3">+ {{ "{:,.2f}".format(o.tutar|float) }} {{ o.birim }}</span>
                             <form method="post" action="{{ url_for('musteri.odeme_sil', id=o.id) }}"
                                 style="display:inline;"
                                 onsubmit="return confirm('Bu tahsilat kaydını silmek istediğinize emin misiniz? Bakiye artacaktır.');">
