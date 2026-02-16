@@ -12,6 +12,10 @@ def giderler():
     if 'logged_in' not in session:
         return redirect(url_for('genel.index'))
 
+    # Template için TRY’yi garanti et
+    kurlar = dict(GUNCEL_KURLAR)
+    kurlar.setdefault("TRY", 1)
+
     # --- PAGINATION ---
     page = request.args.get('page', 1, type=int)
     per_page = 25
@@ -40,7 +44,7 @@ def giderler():
         giderler=pagination.items,   # template geriye dönük uyum
         pagination=pagination,       # template pagination bar için
         bu_ay_toplam=float(bu_ay_toplam),
-        kurlar=GUNCEL_KURLAR,
+        kurlar=kurlar,
         kasalar=kasalar
     )
 
@@ -69,7 +73,9 @@ def gider_ekle():
         return redirect(request.referrer or url_for('gider.giderler'))
 
     # kur -> Decimal (rate)
-    islem_kuru = rate(GUNCEL_KURLAR.get(birim, 1)) if birim != 'TRY' else rate(1)
+    kurlar = dict(GUNCEL_KURLAR)
+    kurlar.setdefault("TRY", 1)
+    islem_kuru = rate(kurlar.get(birim, 1)) if birim != 'TRY' else rate(1)
 
     banka_kasa_id_raw = request.form.get('banka_kasa_id')
     try:

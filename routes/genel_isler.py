@@ -30,6 +30,10 @@ def index():
     }
     guncel_ay = aylar_tr[bu_ay]
 
+    # Template için TRY’yi garanti et
+    kurlar = dict(GUNCEL_KURLAR)
+    kurlar.setdefault("TRY", 1)
+
     # 1) Aylık İş Hacmi (Ciro) - Decimal
     aylik_is_hacmi = Decimal("0")
     isler = IsKaydi.query.filter(
@@ -39,7 +43,7 @@ def index():
 
     for i in isler:
         pb = normalize_currency(i.para_birimi)
-        kur = rate(GUNCEL_KURLAR.get(pb, 1))
+        kur = rate(kurlar.get(pb, 1))
         aylik_is_hacmi += (i.toplam_bedel * kur)
 
     # 2) Aylık Ticari Alımlar - Decimal
@@ -51,7 +55,7 @@ def index():
 
     for s in satin_almalar:
         pb = normalize_currency(s.para_birimi)
-        kur = rate(GUNCEL_KURLAR.get(pb, 1))
+        kur = rate(kurlar.get(pb, 1))
         aylik_satinalma += (s.tutar * kur)
 
     # 3) Aylık İşletme Giderleri - SQL SUM dönüşü Numeric/Decimal olabilir; money() ile normalize ediyoruz
@@ -97,7 +101,7 @@ def index():
         alarm_listesi=alarm_listesi,
         hedef_yuzde=float(hedef_yuzde),
         aylik_hedef=float(aylik_hedef),
-        kurlar=GUNCEL_KURLAR,
+        kurlar=kurlar,
         musteriler=musteriler,
         kasalar=kasalar
     )
@@ -133,7 +137,7 @@ def ayarlar():
                 flash('Aylık hedef başarıyla güncellendi.', 'success')
 
         elif islem == 'kasa_baslangic_guncelle':
-            kasa_id = request.form.get('kasa_id')
+            kasa_id = int(request.form.get('kasa_id') or 0)
             yeni_baslangic = money(request.form.get('baslangic_tutar'))
             kasa = BankaKasa.query.get(kasa_id)
             if kasa:
@@ -291,9 +295,6 @@ def yedekle_ve_mail_at():
     if 'logged_in' not in session:
         return redirect(url_for('genel.index'))
 
-    # SQLite dosyası yedekleme mantığı Postgres'te geçerli değil.
-    # Postgres kullanırken güvenli yöntem pg_dump ile dump almaktır.
-    # Bu route yanlış bir güven duygusu yaratmasın diye uyarıyoruz.
     db_uri = (os.getenv("DATABASE_URL") or "").lower()
     if "postgres" in db_uri:
         flash('PostgreSQL kullanıyorsun. Yedekleme için pg_dump ile dump alınmalı (bu ekrandaki SQLite yedeği geçerli değil).', 'warning')

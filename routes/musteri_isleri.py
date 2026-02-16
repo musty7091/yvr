@@ -1,34 +1,24 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
-from sqlalchemy import or_
-from models import db, Musteri, IsKaydi, Odeme, BankaKasa
+from sqlalchemy import or_, func, extract
+from models import db, Musteri, IsKaydi, Odeme, BankaKasa, money, rate, normalize_currency
+from utils import GUNCEL_KURLAR, pdf_olustur
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-# ImportError fix: money/rate/normalize_currency utils.py içinde yoksa models.py'den al
-try:
-    from utils import GUNCEL_KURLAR, pdf_olustur, money, rate
-except ImportError:
-    from utils import GUNCEL_KURLAR, pdf_olustur
-    from models import money, rate
-
-# normalize_currency kesin lazım (TRY standardı için)
-try:
-    from models import normalize_currency
-except ImportError:
-    # Eğer bir sebeple models'te yoksa, "minimal" fallback:
-    def normalize_currency(v: str) -> str:
-        s = (v or "").strip().upper()
-        if s in ("TL", "₺", "TRY", ""):
-            return "TRY"
-        return s
-
-
 musteri_bp = Blueprint('musteri', __name__)
+
+def _kurlar_try_guvenli():
+    k = dict(GUNCEL_KURLAR)
+    k.setdefault("TRY", 1)
+    return k
+
 
 @musteri_bp.route('/satislar')
 def satislar():
     if 'logged_in' not in session:
         return redirect(url_for('genel.index'))
+
+    kurlar = _kurlar_try_guvenli()
 
     aktif_musteriler = Musteri.query.filter_by(durum='Aktif').all()
 
@@ -41,11 +31,12 @@ def satislar():
                 devam_eden_is_sayisi += 1
 
             pb = normalize_currency(i.para_birimi)
-            kur = rate(GUNCEL_KURLAR.get(pb, 1)) if pb != "TRY" else rate(1)
+            kur = rate(kurlar.get(pb, 1)) if pb != "TRY" else rate(1)
             toplam_alacak_try += (i.toplam_bedel * kur)
 
         for o in m.odemeler:
-            toplam_alacak_try -= (o.tutar * o.kur_degeri)
+            # kur_degeri NULL gelebilir diye garantiye alalım
+            toplam_alacak_try -= (o.tutar * (o.kur_degeri or Decimal("1")))
 
     yaklasan_isler = (
         IsKaydi.query
@@ -55,23 +46,28 @@ def satislar():
         .all()
     )
 
+    # Bu ayki ciroyu SQL ile hesapla (performans)
     simdi = datetime.now()
-    bu_ayki_ciro = Decimal("0")
-    for o in Odeme.query.all():
-        if o.odeme_tarihi and o.odeme_tarihi.month == simdi.month and o.odeme_tarihi.year == simdi.year:
-            bu_ayki_ciro += (o.tutar * o.kur_degeri)
+    bu_ayki_ciro = db.session.query(
+        func.coalesce(func.sum(Odeme.tutar * func.coalesce(Odeme.kur_degeri, Decimal("1"))), Decimal("0"))
+    ).filter(
+        extract('month', Odeme.odeme_tarihi) == simdi.month,
+        extract('year', Odeme.odeme_tarihi) == simdi.year
+    ).scalar()
+    bu_ayki_ciro = money(bu_ayki_ciro)
 
     return render_template(
         'satislar.html',
         alacak=str(money(toplam_alacak_try)),
         is_sayisi=devam_eden_is_sayisi,
         yaklasan_isler=yaklasan_isler,
-        kurlar=GUNCEL_KURLAR,
+        kurlar=kurlar,
         t_musteri=Musteri.query.count(),
         a_musteri=len(aktif_musteriler),
         biten_is=IsKaydi.query.filter_by(durum='Teslim Edildi').count(),
-        ay_ciro=str(money(bu_ayki_ciro))
+        ay_ciro=str(bu_ayki_ciro)
     )
+
 
 @musteri_bp.route('/vadesi_yaklasanlar')
 def vadesi_yaklasanlar():
@@ -96,6 +92,7 @@ def vadesi_yaklasanlar():
     yaklasanlar.sort(key=lambda x: x['vade_tarihi'])
     return render_template('vadesi_yaklasanlar.html', yaklasanlar=yaklasanlar)
 
+
 @musteri_bp.route('/musteriler')
 def musteriler():
     if 'logged_in' not in session:
@@ -110,6 +107,7 @@ def musteriler():
         return render_template('musteriler.html', musteriler=bulunanlar, arama_var=True, terim=q)
 
     return render_template('musteriler.html', musteriler=Musteri.query.filter_by(durum='Aktif').all(), arama_var=False)
+
 
 @musteri_bp.route('/musteri_ekle', methods=['POST'])
 def musteri_ekle():
@@ -126,10 +124,13 @@ def musteri_ekle():
     db.session.commit()
     return redirect(request.referrer or url_for('musteri.musteriler'))
 
+
 @musteri_bp.route('/musteri/<int:id>')
 def musteri_detay(id):
     if 'logged_in' not in session:
         return redirect(url_for('genel.index'))
+
+    kurlar = _kurlar_try_guvenli()
 
     m = Musteri.query.get_or_404(id)
     kasalar = BankaKasa.query.all()
@@ -137,21 +138,22 @@ def musteri_detay(id):
     net_try = Decimal("0")
     for i in m.isler:
         pb = normalize_currency(i.para_birimi)
-        kur = rate(GUNCEL_KURLAR.get(pb, 1)) if pb != "TRY" else rate(1)
+        kur = rate(kurlar.get(pb, 1)) if pb != "TRY" else rate(1)
         net_try += (i.toplam_bedel * kur)
     for o in m.odemeler:
-        net_try -= (o.tutar * o.kur_degeri)
+        net_try -= (o.tutar * (o.kur_degeri or Decimal("1")))
 
-    usd_kur = rate(GUNCEL_KURLAR.get('USD', 1))
+    usd_kur = rate(kurlar.get('USD', 1))
 
     return render_template(
         'musteri_detay.html',
         musteri=m,
-        toplam_tl=str(money(net_try)),  # template uyumu için alan adı aynı kaldı
+        toplam_tl=str(money(net_try)),  # template uyumu için aynı alan adı
         toplam_usd=str(money(net_try / usd_kur)) if usd_kur != 0 else "0.00",
-        kurlar=GUNCEL_KURLAR,
+        kurlar=kurlar,
         kasalar=kasalar
     )
+
 
 @musteri_bp.route('/musteri_duzenle/<int:id>', methods=['GET', 'POST'])
 def musteri_duzenle(id):
@@ -169,6 +171,7 @@ def musteri_duzenle(id):
 
     return render_template('musteri_duzenle.html', musteri=musteri)
 
+
 @musteri_bp.route('/musteri_sil/<int:id>', methods=['POST'])
 def musteri_sil(id):
     if 'logged_in' not in session:
@@ -182,11 +185,13 @@ def musteri_sil(id):
     db.session.commit()
     return redirect(url_for('musteri.musteriler'))
 
+
 @musteri_bp.route('/pasif_musteriler')
 def pasif_musteriler():
     if 'logged_in' not in session:
         return redirect(url_for('genel.index'))
     return render_template('pasif_musteriler.html', musteriler=Musteri.query.filter_by(durum='Pasif').all())
+
 
 @musteri_bp.route('/musteri_aktif_et/<int:id>')
 def musteri_aktif_et(id):
@@ -197,6 +202,7 @@ def musteri_aktif_et(id):
     musteri.durum = 'Aktif'
     db.session.commit()
     return redirect(url_for('musteri.musteriler'))
+
 
 @musteri_bp.route('/is_ekle')
 def is_ekle():
@@ -213,10 +219,13 @@ def is_ekle():
         kasalar=kasalar
     )
 
+
 @musteri_bp.route('/is_kaydet', methods=['POST'])
 def is_kaydet():
     if 'logged_in' not in session:
         return redirect(url_for('genel.index'))
+
+    kurlar = _kurlar_try_guvenli()
 
     m_id = int(request.form.get('musteri_id'))
     is_adi = request.form.get('is_tanimi')
@@ -243,7 +252,7 @@ def is_kaydet():
     a_kapora = money(request.form.get('alinan_kapora'))
     if a_kapora > 0:
         k_birimi = normalize_currency(request.form.get('kapora_birimi') or 'TRY')
-        kapora_kur = rate(GUNCEL_KURLAR.get(k_birimi, 1)) if k_birimi != 'TRY' else rate(1)
+        kapora_kur = rate(kurlar.get(k_birimi, 1)) if k_birimi != 'TRY' else rate(1)
 
         db.session.add(Odeme(
             tutar=a_kapora,
@@ -259,6 +268,7 @@ def is_kaydet():
     db.session.commit()
     return redirect(url_for('musteri.satislar'))
 
+
 @musteri_bp.route('/is_teslim_et/<int:id>')
 def is_teslim_et(id):
     if 'logged_in' not in session:
@@ -269,6 +279,7 @@ def is_teslim_et(id):
     is_k.teslim_edildi_tarihi = datetime.now()
     db.session.commit()
     return redirect(request.referrer or url_for('musteri.musteri_detay', id=is_k.musteri_id))
+
 
 @musteri_bp.route('/is_durum_geri_al/<int:id>')
 def is_durum_geri_al(id):
@@ -281,6 +292,7 @@ def is_durum_geri_al(id):
     db.session.commit()
     return redirect(url_for('musteri.musteri_detay', id=is_k.musteri_id))
 
+
 @musteri_bp.route('/is_sil/<int:id>', methods=['POST'])
 def is_sil(id):
     if 'logged_in' not in session:
@@ -292,16 +304,19 @@ def is_sil(id):
     db.session.commit()
     return redirect(url_for('musteri.musteri_detay', id=m_id))
 
+
 @musteri_bp.route('/musteri_odeme_ekle/<int:m_id>', methods=['POST'])
 def musteri_odeme_ekle(m_id):
     if 'logged_in' not in session:
         return redirect(url_for('genel.index'))
 
+    kurlar = _kurlar_try_guvenli()
+
     if m_id == 0:
         m_id = int(request.form.get('musteri_id_hizli'))
 
     birim = normalize_currency(request.form.get('birim') or 'TRY')
-    kur = rate(GUNCEL_KURLAR.get(birim, 1)) if birim != 'TRY' else rate(1)
+    kur = rate(kurlar.get(birim, 1)) if birim != 'TRY' else rate(1)
 
     is_id_raw = request.form.get('is_id')
     is_id = int(is_id_raw) if (is_id_raw and str(is_id_raw).isdigit()) else None
@@ -322,6 +337,7 @@ def musteri_odeme_ekle(m_id):
     flash('Tahsilat kaydedildi.', 'success')
     return redirect(request.referrer or url_for('musteri.musteri_detay', id=m_id))
 
+
 @musteri_bp.route('/odeme_sil/<int:id>', methods=['POST'])
 def odeme_sil(id):
     if 'logged_in' not in session:
@@ -335,22 +351,25 @@ def odeme_sil(id):
     flash('Tahsilat silindi.', 'warning')
     return redirect(url_for('musteri.musteri_detay', id=m_id))
 
+
 @musteri_bp.route('/pdf_indir/<int:id>')
 def pdf_indir(id):
     if 'logged_in' not in session:
         return redirect(url_for('genel.index'))
+
+    kurlar = _kurlar_try_guvenli()
 
     m = Musteri.query.get_or_404(id)
 
     net_try = Decimal("0")
     for i in m.isler:
         pb = normalize_currency(i.para_birimi)
-        kur = rate(GUNCEL_KURLAR.get(pb, 1)) if pb != "TRY" else rate(1)
+        kur = rate(kurlar.get(pb, 1)) if pb != "TRY" else rate(1)
         net_try += (i.toplam_bedel * kur)
     for o in m.odemeler:
-        net_try -= (o.tutar * o.kur_degeri)
+        net_try -= (o.tutar * (o.kur_degeri or Decimal("1")))
 
-    usd_kur = rate(GUNCEL_KURLAR.get('USD', 1))
+    usd_kur = rate(kurlar.get('USD', 1))
     net_usd = (net_try / usd_kur) if usd_kur != 0 else Decimal("0")
 
     return pdf_olustur(m, money(net_try), money(net_usd))
