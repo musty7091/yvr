@@ -62,7 +62,7 @@ def index():
 
     # 3) Aylık İşletme Giderleri - SQL SUM dönüşü Numeric/Decimal olabilir; money() ile normalize ediyoruz
     aylik_gider_sorgu = db.session.query(
-        func.coalesce(func.sum(Gider.tutar * Gider.kur_degeri), Decimal("0"))
+        func.coalesce(func.sum(Gider.tutar * func.coalesce(Gider.kur_degeri, Decimal("1"))), Decimal("0"))
     ).filter(
         extract('month', Gider.tarih) == bu_ay,
         extract('year', Gider.tarih) == bu_yil
@@ -200,7 +200,7 @@ def kasa_banka_yonetimi():
         toplam_gider = money(toplam_gider)
 
         toplam_tedarikci = db.session.query(
-            func.coalesce(func.sum(TedarikciOdeme.tutar * TedarikciOdeme.kur_degeri), Decimal("0"))
+            func.coalesce(func.sum(TedarikciOdeme.tutar * func.coalesce(TedarikciOdeme.kur_degeri, Decimal("1"))), Decimal("0"))
         ).filter(TedarikciOdeme.banka_kasa_id == k.id).scalar()
         toplam_tedarikci = money(toplam_tedarikci)
 
@@ -249,6 +249,19 @@ def transfer_yap():
         aciklama=request.form.get('aciklama')
     )
     db.session.add(yeni_transfer)
+
+    # >>> EKLEME (KRİTİK): bakiye alanı kullanıldığı için transferde de bakiye güncellenmeli
+    try:
+        kaynak = BankaKasa.query.get(kaynak_id)
+        hedef = BankaKasa.query.get(hedef_id)
+        if kaynak and hasattr(kaynak, "bakiye") and kaynak.bakiye is not None:
+            kaynak.bakiye = money(kaynak.bakiye - tutar)
+        if hedef and hasattr(hedef, "bakiye") and hedef.bakiye is not None:
+            hedef.bakiye = money(hedef.bakiye + tutar)
+    except Exception:
+        # transfer kaydı yine de atılsın; bakiye güncelleme hata verirse sessiz geç
+        pass
+
     db.session.commit()
     flash('Transfer kaydedildi.', 'success')
     return redirect(url_for('genel.kasa_banka_yonetimi'))

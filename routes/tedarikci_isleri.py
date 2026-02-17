@@ -15,27 +15,49 @@ def _kurlar_try_guvenli():
 
 
 def _kur(pb: str, kurlar: dict) -> Decimal:
-    """
-    Para birimini normalize eder ve Decimal kur döner.
-    TRY için 1 döner.
-    """
     pb_n = normalize_currency(pb)
     return rate(kurlar.get(pb_n, 1)) if pb_n != "TRY" else rate(1)
 
 
 def _int_or_none(v):
-    """
-    Formdan gelen id değerini güvenle int/None'a çevirir.
-    '', None, '0' -> None
-    """
     if v is None:
         return None
     s = str(v).strip()
-    if s == "" or s == "0":
+    if s == "" or s.lower() in ("none", "null"):
         return None
-    if s.isdigit():
-        return int(s)
-    return None
+    return int(s) if s.isdigit() else None
+
+
+def _kasa_bakiye_azalt(kasa_id: int, tutar_try: Decimal):
+    """
+    Kasa bakiyesini TRY bazında azaltır.
+    tutar_try: Decimal (TRY)
+    """
+    if not kasa_id:
+        return
+
+    kasa = BankaKasa.query.get(kasa_id)
+    if not kasa:
+        return
+
+    mevcut = money(kasa.bakiye or Decimal("0"))
+    kasa.bakiye = money(mevcut - money(tutar_try))
+
+
+def _kasa_bakiye_arttir(kasa_id: int, tutar_try: Decimal):
+    """
+    Kasa bakiyesini TRY bazında arttırır.
+    tutar_try: Decimal (TRY)
+    """
+    if not kasa_id:
+        return
+
+    kasa = BankaKasa.query.get(kasa_id)
+    if not kasa:
+        return
+
+    mevcut = money(kasa.bakiye or Decimal("0"))
+    kasa.bakiye = money(mevcut + money(tutar_try))
 
 
 @tedarikci_bp.route('/ticari_borclar')
@@ -50,7 +72,10 @@ def ticari_borclar():
         tedarikciler = (
             Tedarikci.query.filter(
                 Tedarikci.durum == 'Aktif',
-                or_(Tedarikci.firma_adi.contains(q), Tedarikci.yetkili_kisi.contains(q))
+                or_(
+                    Tedarikci.firma_adi.contains(q),
+                    Tedarikci.yetkili_kisi.contains(q)
+                )
             ).all()
         )
     else:
@@ -61,15 +86,11 @@ def ticari_borclar():
             sum((alim.tutar * _kur(alim.para_birimi, kurlar)) for alim in t.satin_almalar)
             if t.satin_almalar else Decimal("0")
         )
-
         odeme_toplam = (
             sum((o.tutar * (o.kur_degeri or Decimal("1"))) for o in t.odenenler)
             if t.odenenler else Decimal("0")
         )
-
-        # Template tarafında gerekirse gösterim için kullanırsın.
-        # (Decimal kalsın)
-        t.guncel_bakiye = money(alis_toplam - odeme_toplam)
+        t.guncel_bakiye = alis_toplam - odeme_toplam
 
     tedarikciler.sort(key=lambda x: x.guncel_bakiye, reverse=True)
 
@@ -104,7 +125,6 @@ def tedarikci_detay(id):
         return redirect(url_for('genel.index'))
 
     kurlar = _kurlar_try_guvenli()
-
     t = Tedarikci.query.get_or_404(id)
     kasalar = BankaKasa.query.all()
 
@@ -112,24 +132,22 @@ def tedarikci_detay(id):
         sum((alim.tutar * _kur(alim.para_birimi, kurlar)) for alim in t.satin_almalar)
         if t.satin_almalar else Decimal("0")
     )
-
     odeme_toplam = (
         sum((o.tutar * (o.kur_degeri or Decimal("1"))) for o in t.odenenler)
         if t.odenenler else Decimal("0")
     )
 
-    net_try = money(alis_toplam - odeme_toplam)
+    net_try = alis_toplam - odeme_toplam
 
     usd_kur = rate(kurlar.get('USD', 1))
-    toplam_usd = money(net_try / usd_kur) if usd_kur != 0 else money("0")
+    toplam_usd = (net_try / usd_kur) if usd_kur != 0 else Decimal("0")
 
-    # ✅ KRİTİK: template "{:,.2f}".format(...) kullandığı için STR GÖNDERME!
-    # Decimal gönderiyoruz -> format(...) sorunsuz.
+    # >>> ÖNEMLİ: template format("{:,.2f}") sayı ister. string verme.
     return render_template(
         'tedarikci_detay.html',
         tedarikci=t,
-        toplam_tl=net_try,
-        toplam_usd=toplam_usd,
+        toplam_tl=money(net_try),          # Decimal
+        toplam_usd=money(toplam_usd),      # Decimal
         kurlar=kurlar,
         kasalar=kasalar
     )
@@ -201,40 +219,72 @@ def alim_sil(id):
 
 @tedarikci_bp.route('/tedarikci_odeme_yap', methods=['POST'])
 def tedarikci_odeme_yap():
+    """
+    KRİTİK:
+    - TedarikciOdeme kaydı eklenir
+    - Seçilen kasa/banka hesabının BAKİYESİ (TRY bazında) DÜŞÜRÜLÜR
+    """
     if 'logged_in' not in session:
         return redirect(url_for('genel.index'))
 
     kurlar = _kurlar_try_guvenli()
 
-    t_id = int(request.form.get('tedarikci_id'))
+    t_id = int(request.form.get('tedarikci_id') or 0)
     birim = normalize_currency(request.form.get('birim') or 'TRY')
-    banka_kasa_id = _int_or_none(request.form.get('banka_kasa_id'))  # ✅ int/None
+
+    kasa_id = _int_or_none(request.form.get('banka_kasa_id'))
+    if not kasa_id:
+        flash('Lütfen ödeme çıkacak hesabı seçin.', 'danger')
+        return redirect(url_for('tedarikci.tedarikci_detay', id=t_id))
+
+    tutar = money(request.form.get('tutar') or 0)
+    if tutar <= 0:
+        flash('Tutar 0 olamaz.', 'danger')
+        return redirect(url_for('tedarikci.tedarikci_detay', id=t_id))
 
     kur = rate(kurlar.get(birim, 1)) if birim != 'TRY' else rate(1)
+    tutar_try = money(tutar * kur)  # TRY karşılığı
 
     yeni_odeme = TedarikciOdeme(
-        tutar=money(request.form.get('tutar') or 0),
+        tutar=tutar,
         birim=birim,
         aciklama=request.form.get('aciklama'),
         kur_degeri=kur,
-        banka_kasa_id=banka_kasa_id,   # ✅ integer kaydolur -> kasa özetinde düşer
-        odeme_tarihi=datetime.now(),
-        tedarikci_id=t_id
+        banka_kasa_id=kasa_id,
+        tedarikci_id=t_id,
+        odeme_tarihi=datetime.now()
     )
     db.session.add(yeni_odeme)
+
+    # >>> KASA BAKİYESİNİ DÜŞ
+    _kasa_bakiye_azalt(kasa_id, tutar_try)
+
     db.session.commit()
-    flash('Tedarikçi ödemesi kaydedildi.', 'success')
+    flash('Tedarikçi ödemesi kaydedildi, kasa bakiyesi güncellendi.', 'success')
     return redirect(url_for('tedarikci.tedarikci_detay', id=t_id))
 
 
 @tedarikci_bp.route('/tedarikci_odeme_sil/<int:id>', methods=['POST'])
 def tedarikci_odeme_sil(id):
+    """
+    KRİTİK:
+    - TedarikciOdeme silinir
+    - Seçilen kasa/banka hesabına TRY karşılığı GERİ EKLENİR
+    """
     if 'logged_in' not in session:
         return redirect(url_for('genel.index'))
 
     kayit = TedarikciOdeme.query.get_or_404(id)
     t_id = kayit.tedarikci_id
+
+    kasa_id = kayit.banka_kasa_id
+    tutar_try = money((kayit.tutar or Decimal("0")) * (kayit.kur_degeri or Decimal("1")))
+
     db.session.delete(kayit)
+
+    # >>> KASA BAKİYESİNİ GERİ AL
+    _kasa_bakiye_arttir(kasa_id, tutar_try)
+
     db.session.commit()
-    flash('Tedarikçi ödemesi silindi.', 'warning')
+    flash('Ödeme silindi, kasa bakiyesi geri güncellendi.', 'warning')
     return redirect(url_for('tedarikci.tedarikci_detay', id=t_id))
