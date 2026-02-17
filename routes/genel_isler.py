@@ -18,6 +18,18 @@ import os
 genel_bp = Blueprint('genel', __name__)
 
 
+def _now_utc():
+    # Brute-force kilidi gibi güvenlik kontrollerinde UTC kullanıyoruz
+    return datetime.utcnow()
+
+
+def _safe_int(v, default=0):
+    try:
+        return int(v)
+    except Exception:
+        return default
+
+
 @genel_bp.route('/')
 def index():
     if not session.get('logged_in'):
@@ -119,11 +131,15 @@ def ayarlar():
     kasalar = BankaKasa.query.all()
 
     if request.method == 'POST':
-        islem = request.form.get('islem')
+        islem = (request.form.get('islem') or '').strip()
 
         if islem == 'sifre_degistir':
-            mevcut_sifre = request.form.get('mevcut_sifre')
-            yeni_sifre = request.form.get('yeni_sifre')
+            mevcut_sifre = request.form.get('mevcut_sifre') or ''
+            yeni_sifre = request.form.get('yeni_sifre') or ''
+
+            if not yeni_sifre or len(yeni_sifre) < 6:
+                flash('Yeni şifre en az 6 karakter olmalı.', 'danger')
+                return redirect(url_for('genel.ayarlar'))
 
             if kullanici and kullanici.sifre_kontrol(mevcut_sifre):
                 kullanici.sifre_belirle(yeni_sifre)
@@ -140,7 +156,7 @@ def ayarlar():
                 flash('Aylık hedef başarıyla güncellendi.', 'success')
 
         elif islem == 'kasa_baslangic_guncelle':
-            kasa_id = int(request.form.get('kasa_id') or 0)
+            kasa_id = _safe_int(request.form.get('kasa_id') or 0, 0)
             yeni_baslangic = money(request.form.get('baslangic_tutar'))
             kasa = BankaKasa.query.get(kasa_id)
             if kasa:
@@ -177,8 +193,7 @@ def kasa_banka_yonetimi():
     kasa_ozetleri = []
 
     for k in kasalar:
-        # DÜZELTME: Eğer BankaKasa modelinde bakiye alanı varsa ve doluysa,
-        # yönetim ekranında doğrudan bunu göster (sapma düzeltmesi buradan görünür).
+        # Eğer modelde bakiye alanı varsa ve doluysa doğrudan bunu göster
         if hasattr(k, "bakiye") and k.bakiye is not None:
             kasa_ozetleri.append({
                 'id': k.id,
@@ -236,8 +251,12 @@ def transfer_yap():
 
     tutar = money(request.form.get('tutar'))
 
-    kaynak_id = int(request.form.get('kaynak_hesap_id'))
-    hedef_id = int(request.form.get('hedef_hesap_id'))
+    kaynak_id = _safe_int(request.form.get('kaynak_hesap_id'), 0)
+    hedef_id = _safe_int(request.form.get('hedef_hesap_id'), 0)
+
+    if not kaynak_id or not hedef_id:
+        flash('Transfer için hesap seçimi hatalı.', 'danger')
+        return redirect(url_for('genel.kasa_banka_yonetimi'))
 
     if kaynak_id == hedef_id:
         return redirect(url_for('genel.kasa_banka_yonetimi'))
@@ -250,7 +269,7 @@ def transfer_yap():
     )
     db.session.add(yeni_transfer)
 
-    # >>> EKLEME (KRİTİK): bakiye alanı kullanıldığı için transferde de bakiye güncellenmeli
+    # bakiye alanı kullanıldığı için transferde de bakiye güncellenmeli
     try:
         kaynak = BankaKasa.query.get(kaynak_id)
         hedef = BankaKasa.query.get(hedef_id)
@@ -313,37 +332,46 @@ def login():
     k_adi = (request.form.get('username') or '').strip()
     sifre = request.form.get('password') or ''
 
+    # Boş kullanıcı adı/şifre için hızlı dönüş
+    if not k_adi or not sifre:
+        flash('Geçersiz kullanıcı adı veya şifre!', 'danger')
+        return redirect(url_for('genel.index'))
+
     # --- Basit brute-force koruması (session bazlı) ---
     lock_until = session.get("lock_until")
     if lock_until:
         try:
             lock_until_dt = datetime.fromisoformat(lock_until)
         except Exception:
-            # Bozuk state -> temizle
             session.pop("lock_until", None)
             session.pop("fail_count", None)
             lock_until_dt = None
 
-        if lock_until_dt and datetime.utcnow() < lock_until_dt:
+        if lock_until_dt and _now_utc() < lock_until_dt:
             flash('Çok fazla deneme. Lütfen biraz sonra tekrar deneyin.', 'danger')
             return redirect(url_for('genel.index'))
         else:
             session.pop("lock_until", None)
             session.pop("fail_count", None)
 
+    # Kullanıcıyı bul
     kullanici = Kullanici.query.filter_by(kullanici_adi=k_adi).first()
 
+    # Başarılı giriş
     if kullanici and kullanici.sifre_kontrol(sifre):
+        # session fixation riskini azaltmak için temiz başla
         session.clear()
         session.permanent = True
         session['logged_in'] = True
         session['user_id'] = kullanici.id
+        session['username'] = kullanici.kullanici_adi
         return redirect(url_for('genel.index'))
 
-    fail = int(session.get("fail_count", 0)) + 1
+    # Başarısız giriş
+    fail = _safe_int(session.get("fail_count", 0), 0) + 1
     session["fail_count"] = fail
     if fail >= 5:
-        session["lock_until"] = (datetime.utcnow() + timedelta(minutes=10)).isoformat()
+        session["lock_until"] = (_now_utc() + timedelta(minutes=10)).isoformat()
 
     flash('Geçersiz kullanıcı adı veya şifre!', 'danger')
     return redirect(url_for('genel.index'))

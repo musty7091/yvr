@@ -2,6 +2,7 @@ import os
 from datetime import timedelta
 from flask_wtf.csrf import CSRFProtect
 from flask import Flask
+from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 from models import db
 from routes.musteri_isleri import musteri_bp
@@ -30,6 +31,17 @@ def _env_int(name: str, default: int) -> int:
 
 app = Flask(__name__)
 csrf = CSRFProtect(app)
+
+# Proxy/HTTPS arkasında (Cloudflare/Nginx vb.) doğru çalışması için.
+# Varsayılan kapalı: sadece TRUST_PROXY=1 ise aktif olur.
+if _env_bool("TRUST_PROXY", False):
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app,
+        x_for=_env_int("PROXY_FIX_X_FOR", 1),
+        x_proto=_env_int("PROXY_FIX_X_PROTO", 1),
+        x_host=_env_int("PROXY_FIX_X_HOST", 1),
+        x_port=_env_int("PROXY_FIX_X_PORT", 1),
+    )
 
 # --- GÜVENLİK ---
 secret = os.getenv("SECRET_KEY")

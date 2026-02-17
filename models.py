@@ -43,6 +43,7 @@ def clean_number_string(s: str) -> str:
       "1.234,56" -> "1234.56"
       "1,234.56" -> "1234.56"
       "1234"     -> "1234"
+      " 1 234,56 "-> "1234.56"
     """
     s = (s or "").strip()
     if s == "":
@@ -109,10 +110,13 @@ class Kullanici(db.Model):
     sifre_hash = db.Column(db.String(255), nullable=False)
 
     def sifre_belirle(self, sifre):
+        sifre = (sifre or "").strip()
+        if sifre == "":
+            raise ValueError("Şifre boş olamaz.")
         self.sifre_hash = generate_password_hash(sifre)
 
     def sifre_kontrol(self, sifre):
-        return check_password_hash(self.sifre_hash, sifre)
+        return check_password_hash(self.sifre_hash, sifre or "")
 
 
 class Ayarlar(db.Model):
