@@ -16,17 +16,17 @@ def giderler():
     kurlar = dict(GUNCEL_KURLAR)
     kurlar.setdefault("TRY", 1)
 
-    # --- PAGINATION ---
     page = request.args.get('page', 1, type=int)
-    per_page = 25
 
+    # Gider listesini sayfalı al
     pagination = (
         Gider.query
         .order_by(Gider.tarih.desc())
-        .paginate(page=page, per_page=per_page, error_out=False)
+        .paginate(page=page, per_page=25, error_out=False)
     )
 
-    # Bu ayki toplam gider (sayfaya bağlı olmasın diye SQL ile hesapla)
+    # Bu ay toplam gider (TRY karşılığı)
+    # (Decimal kayma olmasın diye SQL ile hesapla)
     bu_ay = datetime.now()
     bu_ay_toplam = db.session.query(
         func.coalesce(func.sum(Gider.tutar * Gider.kur_degeri), Decimal("0"))
@@ -35,15 +35,13 @@ def giderler():
         extract('year', Gider.tarih) == bu_ay.year
     ).scalar()
 
-    bu_ay_toplam = money(bu_ay_toplam)
-
     kasalar = BankaKasa.query.all()
 
     return render_template(
         'giderler.html',
         giderler=pagination.items,   # template geriye dönük uyum
         pagination=pagination,       # template pagination bar için
-        bu_ay_toplam=float(bu_ay_toplam),
+        bu_ay_toplam=money(bu_ay_toplam),
         kurlar=kurlar,
         kasalar=kasalar
     )
@@ -55,6 +53,13 @@ def gider_ekle():
 
     kategori = request.form.get('kategori')
     aciklama = request.form.get('aciklama')
+
+    # tarih alanı boş kalırsa bugünün tarihi
+    tarih_raw = request.form.get('tarih')
+    try:
+        tarih = datetime.strptime(tarih_raw, '%Y-%m-%d') if tarih_raw else datetime.now()
+    except Exception:
+        tarih = datetime.now()
 
     # TRY standardı
     birim_raw = request.form.get('birim') or 'TRY'
@@ -70,32 +75,45 @@ def gider_ekle():
     # Basit güvenlik: 0 veya negatif gider kaydı eklemeyelim
     if tutar <= Decimal("0"):
         flash('Gider tutarı 0 olamaz. Lütfen tutar girin.', 'warning')
-        return redirect(request.referrer or url_for('gider.giderler'))
+        return redirect(url_for('gider.giderler'))
 
-    # kur -> Decimal (rate)
-    kurlar = dict(GUNCEL_KURLAR)
-    kurlar.setdefault("TRY", 1)
-    islem_kuru = rate(kurlar.get(birim, 1)) if birim != 'TRY' else rate(1)
-
-    banka_kasa_id_raw = request.form.get('banka_kasa_id')
+    # Kur (TRY ise 1)
     try:
-        banka_kasa_id = int(banka_kasa_id_raw) if banka_kasa_id_raw else None
-    except (ValueError, TypeError):
-        banka_kasa_id = None
+        kur_degeri = rate(request.form.get('kur_degeri') or 1)
+    except Exception:
+        kur_degeri = rate(1)
 
-    yeni_gider = Gider(
+    if birim == "TRY":
+        kur_degeri = rate(1)
+
+    # Kasa seçimi (models.py kanonu: banka_kasa_id)
+    # Template/HTML geriye dönük uyum: önce banka_kasa_id, yoksa kasa_id
+    kasa_id_raw = request.form.get('banka_kasa_id') or request.form.get('kasa_id')
+    kasa_id = int(kasa_id_raw) if (kasa_id_raw and str(kasa_id_raw).isdigit()) else None
+
+    # Kasa bakiyesi güncelle (TRY karşılığı)
+    try:
+        try_tutar = money(tutar * kur_degeri)
+    except Exception:
+        try_tutar = money("0")
+
+    if kasa_id:
+        kasa = BankaKasa.query.get(kasa_id)
+        if kasa:
+            # kasa para birimi TRY kabul (projenin mevcut mantığı)
+            kasa.bakiye = money(kasa.bakiye - try_tutar)
+
+    db.session.add(Gider(
         kategori=kategori,
         aciklama=aciklama,
+        tarih=tarih,
         tutar=tutar,
         birim=birim,
-        kur_degeri=islem_kuru,
-        banka_kasa_id=banka_kasa_id,
-        tarih=datetime.now()
-    )
+        kur_degeri=kur_degeri,
+        banka_kasa_id=kasa_id
+    ))
 
-    db.session.add(yeni_gider)
     db.session.commit()
-
     flash('Gider kaydı eklendi.', 'success')
     return redirect(url_for('gider.giderler'))
 
@@ -104,9 +122,20 @@ def gider_sil(id):
     if 'logged_in' not in session:
         return redirect(url_for('genel.index'))
 
-    gider = Gider.query.get_or_404(id)
-    db.session.delete(gider)
-    db.session.commit()
+    g = Gider.query.get_or_404(id)
 
-    flash('Gider kaydı silindi.', 'success')
+    # Silinen gider kasa bakiyesini geri alsın (TRY karşılığı)
+    try:
+        try_tutar = money(g.tutar * g.kur_degeri)
+    except Exception:
+        try_tutar = money("0")
+
+    if g.banka_kasa_id:
+        kasa = BankaKasa.query.get(g.banka_kasa_id)
+        if kasa:
+            kasa.bakiye = money(kasa.bakiye + try_tutar)
+
+    db.session.delete(g)
+    db.session.commit()
+    flash('Gider silindi.', 'info')
     return redirect(url_for('gider.giderler'))

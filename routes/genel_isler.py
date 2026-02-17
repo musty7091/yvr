@@ -96,13 +96,13 @@ def index():
     return render_template(
         'index.html',
         ay_adi=guncel_ay,
-        is_hacmi=float(money(aylik_is_hacmi)),
-        ticari_alim=float(money(aylik_satinalma)),
-        giderler=float(money(aylik_gider_sorgu)),
-        kar=float(money(kar)),
+        is_hacmi=money(aylik_is_hacmi),
+        ticari_alim=money(aylik_satinalma),
+        giderler=money(aylik_gider_sorgu),
+        kar=money(kar),
         alarm_listesi=alarm_listesi,
-        hedef_yuzde=float(hedef_yuzde),
-        aylik_hedef=float(aylik_hedef),
+        hedef_yuzde=hedef_yuzde,
+        aylik_hedef=aylik_hedef,
         kurlar=kurlar,
         musteriler=musteriler,
         kasalar=kasalar
@@ -144,9 +144,22 @@ def ayarlar():
             yeni_baslangic = money(request.form.get('baslangic_tutar'))
             kasa = BankaKasa.query.get(kasa_id)
             if kasa:
-                kasa.baslangic_bakiye = yeni_baslangic
-                db.session.commit()
-                flash(f'{kasa.ad} başlangıç bakiyesi güncellendi.', 'success')
+                # 1) İlk kurulum: başlangıç hiç set edilmemişse (0 ise) hem başlangıç hem bakiye oluştur
+                # 2) Sonraki dönem: sapma düzeltmesi için sadece bakiye güncelle, başlangıca dokunma
+                try:
+                    mevcut_baslangic = money(kasa.baslangic_bakiye)
+                except Exception:
+                    mevcut_baslangic = money("0")
+
+                if mevcut_baslangic == Decimal("0"):
+                    kasa.baslangic_bakiye = yeni_baslangic
+                    kasa.bakiye = yeni_baslangic
+                    db.session.commit()
+                    flash(f'{kasa.ad} başlangıç bakiyesi kaydedildi ve bakiye oluşturuldu.', 'success')
+                else:
+                    kasa.bakiye = yeni_baslangic
+                    db.session.commit()
+                    flash(f'{kasa.ad} bakiyesi güncellendi.', 'success')
 
         return redirect(url_for('genel.ayarlar'))
 
@@ -164,6 +177,18 @@ def kasa_banka_yonetimi():
     kasa_ozetleri = []
 
     for k in kasalar:
+        # DÜZELTME: Eğer BankaKasa modelinde bakiye alanı varsa ve doluysa,
+        # yönetim ekranında doğrudan bunu göster (sapma düzeltmesi buradan görünür).
+        if hasattr(k, "bakiye") and k.bakiye is not None:
+            kasa_ozetleri.append({
+                'id': k.id,
+                'ad': k.ad,
+                'tur': k.tur,
+                'hesap_no': k.hesap_no,
+                'bakiye': money(k.bakiye)
+            })
+            continue
+
         toplam_gelir = db.session.query(
             func.coalesce(func.sum(Odeme.tutar * func.coalesce(Odeme.kur_degeri, Decimal("1"))), Decimal("0"))
         ).filter(Odeme.banka_kasa_id == k.id).scalar()
@@ -198,7 +223,7 @@ def kasa_banka_yonetimi():
             'ad': k.ad,
             'tur': k.tur,
             'hesap_no': k.hesap_no,
-            'bakiye': float(money(bakiye))
+            'bakiye': money(bakiye)
         })
 
     return render_template('kasa_yonetimi.html', kasalar=kasa_ozetleri)

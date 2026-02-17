@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash
 from sqlalchemy import or_
 from models import db, Tedarikci, SatinAlma, TedarikciOdeme, BankaKasa, money, rate, normalize_currency
 from utils import GUNCEL_KURLAR
@@ -23,6 +23,21 @@ def _kur(pb: str, kurlar: dict) -> Decimal:
     return rate(kurlar.get(pb_n, 1)) if pb_n != "TRY" else rate(1)
 
 
+def _int_or_none(v):
+    """
+    Formdan gelen id değerini güvenle int/None'a çevirir.
+    '', None, '0' -> None
+    """
+    if v is None:
+        return None
+    s = str(v).strip()
+    if s == "" or s == "0":
+        return None
+    if s.isdigit():
+        return int(s)
+    return None
+
+
 @tedarikci_bp.route('/ticari_borclar')
 def ticari_borclar():
     if 'logged_in' not in session:
@@ -42,21 +57,22 @@ def ticari_borclar():
         tedarikciler = Tedarikci.query.filter_by(durum='Aktif').all()
 
     for t in tedarikciler:
-        # Alış toplamı (TRY bazında)
         alis_toplam = (
             sum((alim.tutar * _kur(alim.para_birimi, kurlar)) for alim in t.satin_almalar)
             if t.satin_almalar else Decimal("0")
         )
 
-        # Ödeme toplamı (TRY bazında) - kur_degeri null olabilir
         odeme_toplam = (
             sum((o.tutar * (o.kur_degeri or Decimal("1"))) for o in t.odenenler)
             if t.odenenler else Decimal("0")
         )
 
-        t.guncel_bakiye = alis_toplam - odeme_toplam
+        # Template tarafında gerekirse gösterim için kullanırsın.
+        # (Decimal kalsın)
+        t.guncel_bakiye = money(alis_toplam - odeme_toplam)
 
     tedarikciler.sort(key=lambda x: x.guncel_bakiye, reverse=True)
+
     return render_template(
         'ticari_borclar.html',
         tedarikciler=tedarikciler,
@@ -102,16 +118,18 @@ def tedarikci_detay(id):
         if t.odenenler else Decimal("0")
     )
 
-    net_try = alis_toplam - odeme_toplam
+    net_try = money(alis_toplam - odeme_toplam)
 
     usd_kur = rate(kurlar.get('USD', 1))
-    toplam_usd = (net_try / usd_kur) if usd_kur != 0 else Decimal("0")
+    toplam_usd = money(net_try / usd_kur) if usd_kur != 0 else money("0")
 
+    # ✅ KRİTİK: template "{:,.2f}".format(...) kullandığı için STR GÖNDERME!
+    # Decimal gönderiyoruz -> format(...) sorunsuz.
     return render_template(
         'tedarikci_detay.html',
         tedarikci=t,
-        toplam_tl=float(money(net_try)),   # template uyumu için isim aynı kaldı
-        toplam_usd=float(money(toplam_usd)),
+        toplam_tl=net_try,
+        toplam_usd=toplam_usd,
         kurlar=kurlar,
         kasalar=kasalar
     )
@@ -190,7 +208,7 @@ def tedarikci_odeme_yap():
 
     t_id = int(request.form.get('tedarikci_id'))
     birim = normalize_currency(request.form.get('birim') or 'TRY')
-    kasa_id = request.form.get('banka_kasa_id')
+    banka_kasa_id = _int_or_none(request.form.get('banka_kasa_id'))  # ✅ int/None
 
     kur = rate(kurlar.get(birim, 1)) if birim != 'TRY' else rate(1)
 
@@ -199,11 +217,13 @@ def tedarikci_odeme_yap():
         birim=birim,
         aciklama=request.form.get('aciklama'),
         kur_degeri=kur,
-        banka_kasa_id=kasa_id,
+        banka_kasa_id=banka_kasa_id,   # ✅ integer kaydolur -> kasa özetinde düşer
+        odeme_tarihi=datetime.now(),
         tedarikci_id=t_id
     )
     db.session.add(yeni_odeme)
     db.session.commit()
+    flash('Tedarikçi ödemesi kaydedildi.', 'success')
     return redirect(url_for('tedarikci.tedarikci_detay', id=t_id))
 
 
@@ -216,4 +236,5 @@ def tedarikci_odeme_sil(id):
     t_id = kayit.tedarikci_id
     db.session.delete(kayit)
     db.session.commit()
+    flash('Tedarikçi ödemesi silindi.', 'warning')
     return redirect(url_for('tedarikci.tedarikci_detay', id=t_id))

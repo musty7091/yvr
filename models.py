@@ -129,7 +129,12 @@ class BankaKasa(db.Model):
     ad = db.Column(db.String(100), nullable=False)
     tur = db.Column(db.String(50))  # Nakit, Banka, Kredi Kartı
     hesap_no = db.Column(db.String(50))
+
+    # Başlangıç (setup) bakiyesi
     baslangic_bakiye = db.Column(MONEY, default=Decimal("0.00"))
+
+    # ÇALIŞAN SİSTEM İÇİN: route'ların kullandığı güncel bakiye alanı
+    bakiye = db.Column(MONEY, default=Decimal("0.00"))
 
     # backref adı: kasa_kaydi -> template’lerle uyumlu
     odemeler = db.relationship("Odeme", backref="kasa_kaydi", lazy=True)

@@ -234,7 +234,10 @@ def is_kaydet():
     p_birimi = normalize_currency(request.form.get('para_birimi') or 'TRY')
 
     v_gun = int(request.form.get('vade_gun') or 0)
-    kasa_id = request.form.get('banka_kasa_id')
+
+    # banka_kasa_id formdan string gelebilir -> int/None
+    kasa_id_raw = request.form.get('banka_kasa_id')
+    kasa_id = int(kasa_id_raw) if (kasa_id_raw and str(kasa_id_raw).isdigit()) else None
 
     yeni_is = IsKaydi(
         is_tanimi=is_adi,
@@ -254,6 +257,7 @@ def is_kaydet():
         k_birimi = normalize_currency(request.form.get('kapora_birimi') or 'TRY')
         kapora_kur = rate(kurlar.get(k_birimi, 1)) if k_birimi != 'TRY' else rate(1)
 
+        # 1) Odeme kaydı
         db.session.add(Odeme(
             tutar=a_kapora,
             birim=k_birimi,
@@ -264,6 +268,23 @@ def is_kaydet():
             is_kaydi_id=yeni_is.id,
             musteri_id=m_id
         ))
+
+        # 2) Kasa bakiyesi artır (TRY karşılığı)
+        if kasa_id:
+            kasa = BankaKasa.query.get(kasa_id)
+            if kasa:
+                try:
+                    try_tutar = money(a_kapora * (kapora_kur or Decimal("1")))
+                except Exception:
+                    try_tutar = money("0")
+
+                # kasa.bakiye None olabilir -> 0 kabul edelim
+                try:
+                    mevcut_bakiye = money(getattr(kasa, "bakiye", Decimal("0")) or Decimal("0"))
+                except Exception:
+                    mevcut_bakiye = money("0")
+
+                kasa.bakiye = money(mevcut_bakiye + try_tutar)
 
     db.session.commit()
     return redirect(url_for('musteri.satislar'))
@@ -321,17 +342,40 @@ def musteri_odeme_ekle(m_id):
     is_id_raw = request.form.get('is_id')
     is_id = int(is_id_raw) if (is_id_raw and str(is_id_raw).isdigit()) else None
 
+    # banka_kasa_id formdan string gelebilir -> int/None
+    kasa_id_raw = request.form.get('banka_kasa_id')
+    kasa_id = int(kasa_id_raw) if (kasa_id_raw and str(kasa_id_raw).isdigit()) else None
+
+    tutar = money(request.form.get('tutar'))
+
     yeni_odeme = Odeme(
-        tutar=money(request.form.get('tutar')),
+        tutar=tutar,
         birim=birim,
         aciklama=request.form.get('aciklama'),
         odeme_yontemi=request.form.get('odeme_yontemi') or 'Havale/EFT',
-        banka_kasa_id=request.form.get('banka_kasa_id'),
+        banka_kasa_id=kasa_id,
         kur_degeri=kur,
         is_kaydi_id=is_id,
         musteri_id=m_id
     )
     db.session.add(yeni_odeme)
+
+    # Kasa bakiyesi artır (TRY karşılığı)
+    if kasa_id:
+        kasa = BankaKasa.query.get(kasa_id)
+        if kasa:
+            try:
+                try_tutar = money(tutar * (kur or Decimal("1")))
+            except Exception:
+                try_tutar = money("0")
+
+            try:
+                mevcut_bakiye = money(getattr(kasa, "bakiye", Decimal("0")) or Decimal("0"))
+            except Exception:
+                mevcut_bakiye = money("0")
+
+            kasa.bakiye = money(mevcut_bakiye + try_tutar)
+
     db.session.commit()
 
     flash('Tahsilat kaydedildi.', 'success')
@@ -345,6 +389,29 @@ def odeme_sil(id):
 
     o = Odeme.query.get_or_404(id)
     m_id = o.musteri_id
+
+    # Silmeden önce kasa geri alımı (TRY karşılığı)
+    kasa_id = o.banka_kasa_id
+    if kasa_id:
+        kasa = BankaKasa.query.get(kasa_id)
+        if kasa:
+            try:
+                kur_degeri = o.kur_degeri or Decimal("1")
+            except Exception:
+                kur_degeri = Decimal("1")
+
+            try:
+                try_tutar = money(o.tutar * kur_degeri)
+            except Exception:
+                try_tutar = money("0")
+
+            try:
+                mevcut_bakiye = money(getattr(kasa, "bakiye", Decimal("0")) or Decimal("0"))
+            except Exception:
+                mevcut_bakiye = money("0")
+
+            kasa.bakiye = money(mevcut_bakiye - try_tutar)
+
     db.session.delete(o)
     db.session.commit()
 
