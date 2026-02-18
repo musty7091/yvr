@@ -1,0 +1,38 @@
+name: TCMB kurlar.json guncelle
+
+on:
+  schedule:
+    # Her gun 07:05 UTC (TR saatiyle genelde 10:05; yaz/kis saatine gore 1 saat oynar)
+    - cron: "5 7 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  update-rates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run fetch script
+        run: python scripts/fetch_tcmb_rates.py
+
+      - name: Commit & push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add kurlar.json
+
+          # Degisiklik yoksa cik
+          git diff --cached --quiet && echo "No changes" && exit 0
+
+          git commit -m "chore: update kurlar.json (TCMB)"
+          git push
