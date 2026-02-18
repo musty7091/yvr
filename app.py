@@ -13,11 +13,13 @@ from routes.gider_isleri import gider_bp
 # .env yükle
 load_dotenv()
 
+
 def _env_bool(name: str, default: bool = False) -> bool:
     v = os.getenv(name)
     if v is None:
         return default
     return v.strip().lower() in ("1", "true", "yes", "on")
+
 
 def _env_int(name: str, default: int) -> int:
     v = os.getenv(name)
@@ -49,15 +51,20 @@ if not secret:
     raise RuntimeError("SECRET_KEY .env içinde tanımlı olmalı (boş olamaz).")
 app.secret_key = secret
 
-# Cookie güvenlik ayarları (prod için önemli)
+# Cookie güvenlik ayarları
 app.config["SESSION_COOKIE_HTTPONLY"] = _env_bool("SESSION_COOKIE_HTTPONLY", True)
 app.config["SESSION_COOKIE_SAMESITE"] = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
-# HTTPS kullanıyorsan prod’da True olmalı (PythonAnywhere'de True)
 app.config["SESSION_COOKIE_SECURE"] = _env_bool("SESSION_COOKIE_SECURE", True)
 
 # Oturum süresi (saat)
 session_hours = _env_int("SESSION_LIFETIME_HOURS", 12)
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=session_hours)
+
+# CSRF ayarları (proxy/https arkasında stabil çalışması için)
+# Not: HTTPS'te SESSION_COOKIE_SECURE=True olduğu gibi CSRF cookie de Secure olabilir.
+app.config["WTF_CSRF_TIME_LIMIT"] = None  # token süre dolması yüzünden “arada bir” hata olmasın
+app.config["WTF_CSRF_SSL_STRICT"] = _env_bool("WTF_CSRF_SSL_STRICT", False)
+app.config["WTF_CSRF_CHECK_DEFAULT"] = True
 
 # --- VERİTABANI AYARLARI ---
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -83,6 +90,7 @@ db.init_app(app)
 
 # --- İLK ÇALIŞTIRMA: DB OLUŞTUR + MINIMUM KAYITLAR ---
 from models import Kullanici, Ayarlar, BankaKasa, money
+
 
 def bootstrap_db(app):
     """
@@ -116,11 +124,14 @@ def bootstrap_db(app):
             db.session.add(Ayarlar(ay_hedefi=money(default_target)))
 
         # 4) Varsayılan kasalar (hiç yoksa)
+        # ÖNEMLİ: route'lar bakiye alanını aktif kullanıyor. İlk kurulumda bakiye = baslangic_bakiye olmalı.
         if BankaKasa.query.count() == 0:
-            db.session.add(BankaKasa(ad="Dükkan Kasa", tur="Nakit", hesap_no="NAKIT", baslangic_bakiye=money("0")))
-            db.session.add(BankaKasa(ad="Ziraat Bankası", tur="Banka", hesap_no="TR01", baslangic_bakiye=money("0")))
+            b0 = money("0")
+            db.session.add(BankaKasa(ad="Dükkan Kasa", tur="Nakit", hesap_no="NAKIT", baslangic_bakiye=b0, bakiye=b0))
+            db.session.add(BankaKasa(ad="Ziraat Bankası", tur="Banka", hesap_no="TR01", baslangic_bakiye=b0, bakiye=b0))
 
         db.session.commit()
+
 
 bootstrap_db(app)
 # -----------------------------------------------------
@@ -133,5 +144,4 @@ app.register_blueprint(gider_bp, url_prefix="/gider")
 
 if __name__ == "__main__":
     debug = _env_bool("DEBUG", False)
-    # Prod’da debug False olmalı
     app.run(debug=debug, port=5000)

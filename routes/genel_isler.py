@@ -30,9 +30,34 @@ def _safe_int(v, default=0):
         return default
 
 
+def _login_gerekli():
+    return bool(session.get("logged_in"))
+
+
+def _safe_decimal_one(v):
+    try:
+        if v is None:
+            return Decimal("1")
+        if isinstance(v, Decimal):
+            return v
+        return Decimal(str(v))
+    except Exception:
+        return Decimal("1")
+
+
+def _safe_kasa_bakiye(kasa):
+    """
+    kasa.bakiye None / boş ise 0 kabul et.
+    """
+    try:
+        return money(getattr(kasa, "bakiye", Decimal("0")) or Decimal("0"))
+    except Exception:
+        return money("0")
+
+
 @genel_bp.route('/')
 def index():
-    if not session.get('logged_in'):
+    if not _login_gerekli():
         return render_template('giris.html')
 
     bugun = datetime.now()
@@ -72,7 +97,7 @@ def index():
         kur = rate(kurlar.get(pb, 1))
         aylik_satinalma += (s.tutar * kur)
 
-    # 3) Aylık İşletme Giderleri - SQL SUM dönüşü Numeric/Decimal olabilir; money() ile normalize ediyoruz
+    # 3) Aylık İşletme Giderleri
     aylik_gider_sorgu = db.session.query(
         func.coalesce(func.sum(Gider.tutar * func.coalesce(Gider.kur_degeri, Decimal("1"))), Decimal("0"))
     ).filter(
@@ -123,7 +148,7 @@ def index():
 
 @genel_bp.route('/ayarlar', methods=['GET', 'POST'])
 def ayarlar():
-    if not session.get('logged_in'):
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     kullanici = Kullanici.query.filter_by(kullanici_adi='admin').first()
@@ -160,8 +185,6 @@ def ayarlar():
             yeni_baslangic = money(request.form.get('baslangic_tutar'))
             kasa = BankaKasa.query.get(kasa_id)
             if kasa:
-                # 1) İlk kurulum: başlangıç hiç set edilmemişse (0 ise) hem başlangıç hem bakiye oluştur
-                # 2) Sonraki dönem: sapma düzeltmesi için sadece bakiye güncelle, başlangıca dokunma
                 try:
                     mevcut_baslangic = money(kasa.baslangic_bakiye)
                 except Exception:
@@ -184,7 +207,7 @@ def ayarlar():
 
 @genel_bp.route('/kasa_banka_yonetimi')
 def kasa_banka_yonetimi():
-    if not session.get('logged_in'):
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     db.session.expire_all()
@@ -210,7 +233,7 @@ def kasa_banka_yonetimi():
         toplam_gelir = money(toplam_gelir)
 
         toplam_gider = db.session.query(
-            func.coalesce(func.sum(Gider.tutar * Gider.kur_degeri), Decimal("0"))
+            func.coalesce(func.sum(Gider.tutar * func.coalesce(Gider.kur_degeri, Decimal("1"))), Decimal("0"))
         ).filter(Gider.banka_kasa_id == k.id).scalar()
         toplam_gider = money(toplam_gider)
 
@@ -246,7 +269,7 @@ def kasa_banka_yonetimi():
 
 @genel_bp.route('/transfer_yap', methods=['POST'])
 def transfer_yap():
-    if not session.get('logged_in'):
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     tutar = money(request.form.get('tutar'))
@@ -261,24 +284,32 @@ def transfer_yap():
     if kaynak_id == hedef_id:
         return redirect(url_for('genel.kasa_banka_yonetimi'))
 
+    if tutar <= Decimal("0"):
+        flash('Transfer tutarı 0 olamaz.', 'danger')
+        return redirect(url_for('genel.kasa_banka_yonetimi'))
+
     yeni_transfer = Transfer(
         tutar=tutar,
         kaynak_hesap_id=kaynak_id,
         hedef_hesap_id=hedef_id,
-        aciklama=request.form.get('aciklama')
+        aciklama=(request.form.get('aciklama') or '').strip()
     )
     db.session.add(yeni_transfer)
 
-    # bakiye alanı kullanıldığı için transferde de bakiye güncellenmeli
+    # bakiye alanı kullanıldığı için transferde de bakiye güncellenmeli (None-safe)
     try:
         kaynak = BankaKasa.query.get(kaynak_id)
         hedef = BankaKasa.query.get(hedef_id)
-        if kaynak and hasattr(kaynak, "bakiye") and kaynak.bakiye is not None:
-            kaynak.bakiye = money(kaynak.bakiye - tutar)
-        if hedef and hasattr(hedef, "bakiye") and hedef.bakiye is not None:
-            hedef.bakiye = money(hedef.bakiye + tutar)
+
+        if kaynak and hasattr(kaynak, "bakiye"):
+            mevcut = _safe_kasa_bakiye(kaynak)
+            kaynak.bakiye = money(mevcut - tutar)
+
+        if hedef and hasattr(hedef, "bakiye"):
+            mevcut = _safe_kasa_bakiye(hedef)
+            hedef.bakiye = money(mevcut + tutar)
+
     except Exception:
-        # transfer kaydı yine de atılsın; bakiye güncelleme hata verirse sessiz geç
         pass
 
     db.session.commit()
@@ -288,13 +319,18 @@ def transfer_yap():
 
 @genel_bp.route('/kasa_banka_ekle', methods=['POST'])
 def kasa_banka_ekle():
-    if not session.get('logged_in'):
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
+    ad = (request.form.get('ad') or '').strip()
+    if not ad:
+        flash('Kasa/Banka adı boş olamaz.', 'danger')
+        return redirect(url_for('genel.kasa_banka_yonetimi'))
+
     yeni_kasa = BankaKasa(
-        ad=request.form.get('ad'),
-        tur=request.form.get('tur'),
-        hesap_no=request.form.get('hesap_no')
+        ad=ad,
+        tur=(request.form.get('tur') or '').strip(),
+        hesap_no=(request.form.get('hesap_no') or '').strip()
     )
     db.session.add(yeni_kasa)
     db.session.commit()
@@ -304,10 +340,25 @@ def kasa_banka_ekle():
 
 @genel_bp.route('/kasa_banka_sil/<int:id>', methods=['POST'])
 def kasa_banka_sil(id):
-    if not session.get('logged_in'):
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     kasa = BankaKasa.query.get_or_404(id)
+
+    # Bağlı kayıt varsa silmeye çalışma (DB hata vermesin)
+    bagli_odeme = Odeme.query.filter(Odeme.banka_kasa_id == kasa.id).first()
+    bagli_gider = Gider.query.filter(Gider.banka_kasa_id == kasa.id).first()
+    bagli_tedarikci = TedarikciOdeme.query.filter(TedarikciOdeme.banka_kasa_id == kasa.id).first()
+    bagli_transfer = (
+        Transfer.query.filter(
+            (Transfer.kaynak_hesap_id == kasa.id) | (Transfer.hedef_hesap_id == kasa.id)
+        ).first()
+    )
+
+    if bagli_odeme or bagli_gider or bagli_tedarikci or bagli_transfer:
+        flash('Bu kasa/banka hesabına bağlı kayıtlar var. Silinemez.', 'danger')
+        return redirect(url_for('genel.kasa_banka_yonetimi'))
+
     db.session.delete(kasa)
     db.session.commit()
     flash('Kasa/Banka silindi.', 'warning')
@@ -316,7 +367,7 @@ def kasa_banka_sil(id):
 
 @genel_bp.route('/hedef_guncelle', methods=['POST'])
 def hedef_guncelle():
-    if not session.get('logged_in'):
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     ayar = Ayarlar.query.first()
@@ -359,7 +410,6 @@ def login():
 
     # Başarılı giriş
     if kullanici and kullanici.sifre_kontrol(sifre):
-        # session fixation riskini azaltmak için temiz başla
         session.clear()
         session.permanent = True
         session['logged_in'] = True
@@ -385,7 +435,7 @@ def logout():
 
 @genel_bp.route('/kurlari_guncelle')
 def kurlari_guncelle():
-    if not session.get('logged_in'):
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     kurlari_sabitle()
@@ -395,7 +445,7 @@ def kurlari_guncelle():
 
 @genel_bp.route('/yedekle_ve_mail_at')
 def yedekle_ve_mail_at():
-    if not session.get('logged_in'):
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     db_uri = (os.getenv("DATABASE_URL") or "").lower()
@@ -405,6 +455,10 @@ def yedekle_ve_mail_at():
 
     basedir = os.path.abspath(os.path.dirname(__file__))
     db_path = os.path.join(os.path.dirname(basedir), 'instance', 'yvr_veritabani.db')
+
+    if not os.path.exists(db_path):
+        flash('Veritabanı dosyası bulunamadı. (instance/yvr_veritabani.db)', 'danger')
+        return redirect(url_for('genel.ayarlar'))
 
     mail_server = os.getenv('MAIL_SERVER')
     mail_port = os.getenv('MAIL_PORT', '587')

@@ -7,9 +7,35 @@ from decimal import Decimal
 
 gider_bp = Blueprint('gider', __name__)
 
+
+def _login_gerekli():
+    return bool(session.get("logged_in"))
+
+
+def _safe_decimal_one(v):
+    try:
+        if v is None:
+            return Decimal("1")
+        if isinstance(v, Decimal):
+            return v
+        return Decimal(str(v))
+    except Exception:
+        return Decimal("1")
+
+
+def _safe_kasa_bakiye(kasa):
+    """
+    kasa.bakiye None / boş ise 0 kabul et.
+    """
+    try:
+        return money(getattr(kasa, "bakiye", Decimal("0")) or Decimal("0"))
+    except Exception:
+        return money("0")
+
+
 @gider_bp.route('/giderler')
 def giderler():
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     # Template için TRY’yi garanti et
@@ -26,10 +52,9 @@ def giderler():
     )
 
     # Bu ay toplam gider (TRY karşılığı)
-    # (Decimal kayma olmasın diye SQL ile hesapla)
     bu_ay = datetime.now()
     bu_ay_toplam = db.session.query(
-        func.coalesce(func.sum(Gider.tutar * Gider.kur_degeri), Decimal("0"))
+        func.coalesce(func.sum(Gider.tutar * func.coalesce(Gider.kur_degeri, Decimal("1"))), Decimal("0"))
     ).filter(
         extract('month', Gider.tarih) == bu_ay.month,
         extract('year', Gider.tarih) == bu_ay.year
@@ -46,13 +71,14 @@ def giderler():
         kasalar=kasalar
     )
 
+
 @gider_bp.route('/gider_ekle', methods=['POST'])
 def gider_ekle():
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
-    kategori = request.form.get('kategori')
-    aciklama = request.form.get('aciklama')
+    kategori = (request.form.get('kategori') or '').strip()
+    aciklama = (request.form.get('aciklama') or '').strip()
 
     # tarih alanı boş kalırsa bugünün tarihi
     tarih_raw = request.form.get('tarih')
@@ -93,15 +119,15 @@ def gider_ekle():
 
     # Kasa bakiyesi güncelle (TRY karşılığı)
     try:
-        try_tutar = money(tutar * kur_degeri)
+        try_tutar = money(tutar * (kur_degeri or Decimal("1")))
     except Exception:
         try_tutar = money("0")
 
     if kasa_id:
         kasa = BankaKasa.query.get(kasa_id)
         if kasa:
-            # kasa para birimi TRY kabul (projenin mevcut mantığı)
-            kasa.bakiye = money(kasa.bakiye - try_tutar)
+            mevcut_bakiye = _safe_kasa_bakiye(kasa)
+            kasa.bakiye = money(mevcut_bakiye - try_tutar)
 
     db.session.add(Gider(
         kategori=kategori,
@@ -117,23 +143,26 @@ def gider_ekle():
     flash('Gider kaydı eklendi.', 'success')
     return redirect(url_for('gider.giderler'))
 
+
 @gider_bp.route('/gider_sil/<int:id>', methods=['POST'])
 def gider_sil(id):
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     g = Gider.query.get_or_404(id)
 
     # Silinen gider kasa bakiyesini geri alsın (TRY karşılığı)
+    kur_d = _safe_decimal_one(getattr(g, "kur_degeri", None))
     try:
-        try_tutar = money(g.tutar * g.kur_degeri)
+        try_tutar = money(g.tutar * kur_d)
     except Exception:
         try_tutar = money("0")
 
     if g.banka_kasa_id:
         kasa = BankaKasa.query.get(g.banka_kasa_id)
         if kasa:
-            kasa.bakiye = money(kasa.bakiye + try_tutar)
+            mevcut_bakiye = _safe_kasa_bakiye(kasa)
+            kasa.bakiye = money(mevcut_bakiye + try_tutar)
 
     db.session.delete(g)
     db.session.commit()

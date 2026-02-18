@@ -7,15 +7,38 @@ from decimal import Decimal
 
 musteri_bp = Blueprint('musteri', __name__)
 
+
 def _kurlar_try_guvenli():
     k = dict(GUNCEL_KURLAR)
     k.setdefault("TRY", 1)
     return k
 
 
+def _login_gerekli():
+    return bool(session.get("logged_in"))
+
+
+def _safe_int(v, default=0):
+    try:
+        return int(v)
+    except Exception:
+        return default
+
+
+def _safe_decimal_one(v):
+    try:
+        if v is None:
+            return Decimal("1")
+        if isinstance(v, Decimal):
+            return v
+        return Decimal(str(v))
+    except Exception:
+        return Decimal("1")
+
+
 @musteri_bp.route('/satislar')
 def satislar():
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     kurlar = _kurlar_try_guvenli()
@@ -35,8 +58,8 @@ def satislar():
             toplam_alacak_try += (i.toplam_bedel * kur)
 
         for o in m.odemeler:
-            # kur_degeri NULL gelebilir diye garantiye alalım
-            toplam_alacak_try -= (o.tutar * (o.kur_degeri or Decimal("1")))
+            kur_d = _safe_decimal_one(getattr(o, "kur_degeri", None))
+            toplam_alacak_try -= (o.tutar * kur_d)
 
     yaklasan_isler = (
         IsKaydi.query
@@ -71,7 +94,7 @@ def satislar():
 
 @musteri_bp.route('/vadesi_yaklasanlar')
 def vadesi_yaklasanlar():
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     teslim_edilenler = IsKaydi.query.filter_by(durum='Teslim Edildi').all()
@@ -79,7 +102,7 @@ def vadesi_yaklasanlar():
     simdi = datetime.now()
 
     for is_k in teslim_edilenler:
-        if is_k.teslim_edildi_tarihi and is_k.vade_gun > 0:
+        if is_k.teslim_edildi_tarihi and (is_k.vade_gun or 0) > 0:
             vade_tarihi = is_k.teslim_edildi_tarihi + timedelta(days=is_k.vade_gun)
             kalan_gun = (vade_tarihi - simdi).days
 
@@ -95,10 +118,10 @@ def vadesi_yaklasanlar():
 
 @musteri_bp.route('/musteriler')
 def musteriler():
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
-    q = request.args.get('q')
+    q = (request.args.get('q') or '').strip()
     if q:
         bulunanlar = Musteri.query.filter(
             Musteri.durum == 'Aktif',
@@ -111,14 +134,19 @@ def musteriler():
 
 @musteri_bp.route('/musteri_ekle', methods=['POST'])
 def musteri_ekle():
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
+    ad_soyad = (request.form.get('ad_soyad') or '').strip()
+    if not ad_soyad:
+        flash('Müşteri adı boş olamaz.', 'danger')
+        return redirect(request.referrer or url_for('musteri.musteriler'))
+
     db.session.add(Musteri(
-        ad_soyad=request.form.get('ad_soyad'),
-        telefon=request.form.get('telefon'),
-        isyeri_adi=request.form.get('isyeri_adi'),
-        isyeri_adresi=request.form.get('isyeri_adresi'),
+        ad_soyad=ad_soyad,
+        telefon=(request.form.get('telefon') or '').strip(),
+        isyeri_adi=(request.form.get('isyeri_adi') or '').strip(),
+        isyeri_adresi=(request.form.get('isyeri_adresi') or '').strip(),
         durum='Aktif'
     ))
     db.session.commit()
@@ -127,7 +155,7 @@ def musteri_ekle():
 
 @musteri_bp.route('/musteri/<int:id>')
 def musteri_detay(id):
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     kurlar = _kurlar_try_guvenli()
@@ -141,7 +169,8 @@ def musteri_detay(id):
         kur = rate(kurlar.get(pb, 1)) if pb != "TRY" else rate(1)
         net_try += (i.toplam_bedel * kur)
     for o in m.odemeler:
-        net_try -= (o.tutar * (o.kur_degeri or Decimal("1")))
+        kur_d = _safe_decimal_one(getattr(o, "kur_degeri", None))
+        net_try -= (o.tutar * kur_d)
 
     usd_kur = rate(kurlar.get('USD', 1))
 
@@ -157,15 +186,20 @@ def musteri_detay(id):
 
 @musteri_bp.route('/musteri_duzenle/<int:id>', methods=['GET', 'POST'])
 def musteri_duzenle(id):
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     musteri = Musteri.query.get_or_404(id)
     if request.method == 'POST':
-        musteri.ad_soyad = request.form.get('ad_soyad')
-        musteri.telefon = request.form.get('telefon')
-        musteri.isyeri_adi = request.form.get('isyeri_adi')
-        musteri.isyeri_adresi = request.form.get('isyeri_adresi')
+        ad_soyad = (request.form.get('ad_soyad') or '').strip()
+        if not ad_soyad:
+            flash('Müşteri adı boş olamaz.', 'danger')
+            return redirect(url_for('musteri.musteri_duzenle', id=id))
+
+        musteri.ad_soyad = ad_soyad
+        musteri.telefon = (request.form.get('telefon') or '').strip()
+        musteri.isyeri_adi = (request.form.get('isyeri_adi') or '').strip()
+        musteri.isyeri_adresi = (request.form.get('isyeri_adresi') or '').strip()
         db.session.commit()
         return redirect(url_for('musteri.musteriler'))
 
@@ -174,7 +208,7 @@ def musteri_duzenle(id):
 
 @musteri_bp.route('/musteri_sil/<int:id>', methods=['POST'])
 def musteri_sil(id):
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     musteri = Musteri.query.get_or_404(id)
@@ -188,14 +222,14 @@ def musteri_sil(id):
 
 @musteri_bp.route('/pasif_musteriler')
 def pasif_musteriler():
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
     return render_template('pasif_musteriler.html', musteriler=Musteri.query.filter_by(durum='Pasif').all())
 
 
 @musteri_bp.route('/musteri_aktif_et/<int:id>')
 def musteri_aktif_et(id):
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     musteri = Musteri.query.get_or_404(id)
@@ -206,7 +240,7 @@ def musteri_aktif_et(id):
 
 @musteri_bp.route('/is_ekle')
 def is_ekle():
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     secili_id = request.args.get('m_id')
@@ -222,22 +256,35 @@ def is_ekle():
 
 @musteri_bp.route('/is_kaydet', methods=['POST'])
 def is_kaydet():
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     kurlar = _kurlar_try_guvenli()
 
-    m_id = int(request.form.get('musteri_id'))
-    is_adi = request.form.get('is_tanimi')
+    m_id = _safe_int(request.form.get('musteri_id'), 0)
+    if not m_id:
+        flash('Müşteri seçimi hatalı.', 'danger')
+        return redirect(request.referrer or url_for('musteri.is_ekle'))
+
+    is_adi = (request.form.get('is_tanimi') or '').strip()
+    if not is_adi:
+        flash('İş tanımı boş olamaz.', 'danger')
+        return redirect(request.referrer or url_for('musteri.is_ekle'))
 
     t_bedel = money(request.form.get('toplam_bedel'))
+    if t_bedel < 0:
+        flash('Toplam bedel negatif olamaz.', 'danger')
+        return redirect(request.referrer or url_for('musteri.is_ekle'))
+
     p_birimi = normalize_currency(request.form.get('para_birimi') or 'TRY')
 
-    v_gun = int(request.form.get('vade_gun') or 0)
+    v_gun = _safe_int(request.form.get('vade_gun') or 0, 0)
+    if v_gun < 0:
+        v_gun = 0
 
     # banka_kasa_id formdan string gelebilir -> int/None
     kasa_id_raw = request.form.get('banka_kasa_id')
-    kasa_id = int(kasa_id_raw) if (kasa_id_raw and str(kasa_id_raw).isdigit()) else None
+    kasa_id = _safe_int(kasa_id_raw, 0) if (kasa_id_raw and str(kasa_id_raw).isdigit()) else None
 
     yeni_is = IsKaydi(
         is_tanimi=is_adi,
@@ -253,6 +300,9 @@ def is_kaydet():
     db.session.commit()
 
     a_kapora = money(request.form.get('alinan_kapora'))
+    if a_kapora < 0:
+        a_kapora = money("0")
+
     if a_kapora > 0:
         k_birimi = normalize_currency(request.form.get('kapora_birimi') or 'TRY')
         kapora_kur = rate(kurlar.get(k_birimi, 1)) if k_birimi != 'TRY' else rate(1)
@@ -278,7 +328,6 @@ def is_kaydet():
                 except Exception:
                     try_tutar = money("0")
 
-                # kasa.bakiye None olabilir -> 0 kabul edelim
                 try:
                     mevcut_bakiye = money(getattr(kasa, "bakiye", Decimal("0")) or Decimal("0"))
                 except Exception:
@@ -292,7 +341,7 @@ def is_kaydet():
 
 @musteri_bp.route('/is_teslim_et/<int:id>')
 def is_teslim_et(id):
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     is_k = IsKaydi.query.get_or_404(id)
@@ -304,7 +353,7 @@ def is_teslim_et(id):
 
 @musteri_bp.route('/is_durum_geri_al/<int:id>')
 def is_durum_geri_al(id):
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     is_k = IsKaydi.query.get_or_404(id)
@@ -316,7 +365,7 @@ def is_durum_geri_al(id):
 
 @musteri_bp.route('/is_sil/<int:id>', methods=['POST'])
 def is_sil(id):
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     is_k = IsKaydi.query.get_or_404(id)
@@ -328,31 +377,37 @@ def is_sil(id):
 
 @musteri_bp.route('/musteri_odeme_ekle/<int:m_id>', methods=['POST'])
 def musteri_odeme_ekle(m_id):
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     kurlar = _kurlar_try_guvenli()
 
     if m_id == 0:
-        m_id = int(request.form.get('musteri_id_hizli'))
+        m_id = _safe_int(request.form.get('musteri_id_hizli'), 0)
+        if not m_id:
+            flash('Müşteri seçimi hatalı.', 'danger')
+            return redirect(request.referrer or url_for('musteri.satislar'))
 
     birim = normalize_currency(request.form.get('birim') or 'TRY')
     kur = rate(kurlar.get(birim, 1)) if birim != 'TRY' else rate(1)
 
     is_id_raw = request.form.get('is_id')
-    is_id = int(is_id_raw) if (is_id_raw and str(is_id_raw).isdigit()) else None
+    is_id = _safe_int(is_id_raw, 0) if (is_id_raw and str(is_id_raw).isdigit()) else None
 
     # banka_kasa_id formdan string gelebilir -> int/None
     kasa_id_raw = request.form.get('banka_kasa_id')
-    kasa_id = int(kasa_id_raw) if (kasa_id_raw and str(kasa_id_raw).isdigit()) else None
+    kasa_id = _safe_int(kasa_id_raw, 0) if (kasa_id_raw and str(kasa_id_raw).isdigit()) else None
 
     tutar = money(request.form.get('tutar'))
+    if tutar <= 0:
+        flash('Tutar 0 olamaz.', 'danger')
+        return redirect(request.referrer or url_for('musteri.musteri_detay', id=m_id))
 
     yeni_odeme = Odeme(
         tutar=tutar,
         birim=birim,
-        aciklama=request.form.get('aciklama'),
-        odeme_yontemi=request.form.get('odeme_yontemi') or 'Havale/EFT',
+        aciklama=(request.form.get('aciklama') or '').strip(),
+        odeme_yontemi=(request.form.get('odeme_yontemi') or 'Havale/EFT').strip(),
         banka_kasa_id=kasa_id,
         kur_degeri=kur,
         is_kaydi_id=is_id,
@@ -384,7 +439,7 @@ def musteri_odeme_ekle(m_id):
 
 @musteri_bp.route('/odeme_sil/<int:id>', methods=['POST'])
 def odeme_sil(id):
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     o = Odeme.query.get_or_404(id)
@@ -395,10 +450,7 @@ def odeme_sil(id):
     if kasa_id:
         kasa = BankaKasa.query.get(kasa_id)
         if kasa:
-            try:
-                kur_degeri = o.kur_degeri or Decimal("1")
-            except Exception:
-                kur_degeri = Decimal("1")
+            kur_degeri = _safe_decimal_one(getattr(o, "kur_degeri", None))
 
             try:
                 try_tutar = money(o.tutar * kur_degeri)
@@ -421,7 +473,7 @@ def odeme_sil(id):
 
 @musteri_bp.route('/pdf_indir/<int:id>')
 def pdf_indir(id):
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     kurlar = _kurlar_try_guvenli()
@@ -434,7 +486,8 @@ def pdf_indir(id):
         kur = rate(kurlar.get(pb, 1)) if pb != "TRY" else rate(1)
         net_try += (i.toplam_bedel * kur)
     for o in m.odemeler:
-        net_try -= (o.tutar * (o.kur_degeri or Decimal("1")))
+        kur_d = _safe_decimal_one(getattr(o, "kur_degeri", None))
+        net_try -= (o.tutar * kur_d)
 
     usd_kur = rate(kurlar.get('USD', 1))
     net_usd = (net_try / usd_kur) if usd_kur != 0 else Decimal("0")

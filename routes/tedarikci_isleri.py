@@ -14,9 +14,15 @@ def _kurlar_try_guvenli():
     return k
 
 
-def _kur(pb: str, kurlar: dict) -> Decimal:
-    pb_n = normalize_currency(pb)
-    return rate(kurlar.get(pb_n, 1)) if pb_n != "TRY" else rate(1)
+def _login_gerekli():
+    return bool(session.get("logged_in"))
+
+
+def _safe_int(v, default=0):
+    try:
+        return int(v)
+    except Exception:
+        return default
 
 
 def _int_or_none(v):
@@ -26,6 +32,22 @@ def _int_or_none(v):
     if s == "" or s.lower() in ("none", "null"):
         return None
     return int(s) if s.isdigit() else None
+
+
+def _safe_decimal_one(v):
+    try:
+        if v is None:
+            return Decimal("1")
+        if isinstance(v, Decimal):
+            return v
+        return Decimal(str(v))
+    except Exception:
+        return Decimal("1")
+
+
+def _kur(pb: str, kurlar: dict) -> Decimal:
+    pb_n = normalize_currency(pb)
+    return rate(kurlar.get(pb_n, 1)) if pb_n != "TRY" else rate(1)
 
 
 def _kasa_bakiye_azalt(kasa_id: int, tutar_try: Decimal):
@@ -40,7 +62,7 @@ def _kasa_bakiye_azalt(kasa_id: int, tutar_try: Decimal):
     if not kasa:
         return
 
-    mevcut = money(kasa.bakiye or Decimal("0"))
+    mevcut = money(getattr(kasa, "bakiye", Decimal("0")) or Decimal("0"))
     kasa.bakiye = money(mevcut - money(tutar_try))
 
 
@@ -56,17 +78,17 @@ def _kasa_bakiye_arttir(kasa_id: int, tutar_try: Decimal):
     if not kasa:
         return
 
-    mevcut = money(kasa.bakiye or Decimal("0"))
+    mevcut = money(getattr(kasa, "bakiye", Decimal("0")) or Decimal("0"))
     kasa.bakiye = money(mevcut + money(tutar_try))
 
 
 @tedarikci_bp.route('/ticari_borclar')
 def ticari_borclar():
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     kurlar = _kurlar_try_guvenli()
-    q = request.args.get('q')
+    q = (request.args.get('q') or '').strip()
 
     if q:
         tedarikciler = (
@@ -87,7 +109,7 @@ def ticari_borclar():
             if t.satin_almalar else Decimal("0")
         )
         odeme_toplam = (
-            sum((o.tutar * (o.kur_degeri or Decimal("1"))) for o in t.odenenler)
+            sum((o.tutar * (_safe_decimal_one(getattr(o, "kur_degeri", None)))) for o in t.odenenler)
             if t.odenenler else Decimal("0")
         )
         t.guncel_bakiye = alis_toplam - odeme_toplam
@@ -105,14 +127,19 @@ def ticari_borclar():
 
 @tedarikci_bp.route('/tedarikci_ekle', methods=['POST'])
 def tedarikci_ekle():
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
+    firma_adi = (request.form.get('firma_adi') or '').strip()
+    if not firma_adi:
+        flash('Firma adı boş olamaz.', 'danger')
+        return redirect(url_for('tedarikci.ticari_borclar'))
+
     db.session.add(Tedarikci(
-        firma_adi=request.form.get('firma_adi'),
-        yetkili_kisi=request.form.get('yetkili_kisi'),
-        telefon=request.form.get('telefon'),
-        adres=request.form.get('adres'),
+        firma_adi=firma_adi,
+        yetkili_kisi=(request.form.get('yetkili_kisi') or '').strip(),
+        telefon=(request.form.get('telefon') or '').strip(),
+        adres=(request.form.get('adres') or '').strip(),
         durum='Aktif'
     ))
     db.session.commit()
@@ -121,7 +148,7 @@ def tedarikci_ekle():
 
 @tedarikci_bp.route('/tedarikci/<int:id>')
 def tedarikci_detay(id):
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     kurlar = _kurlar_try_guvenli()
@@ -133,7 +160,7 @@ def tedarikci_detay(id):
         if t.satin_almalar else Decimal("0")
     )
     odeme_toplam = (
-        sum((o.tutar * (o.kur_degeri or Decimal("1"))) for o in t.odenenler)
+        sum((o.tutar * (_safe_decimal_one(getattr(o, "kur_degeri", None)))) for o in t.odenenler)
         if t.odenenler else Decimal("0")
     )
 
@@ -142,7 +169,6 @@ def tedarikci_detay(id):
     usd_kur = rate(kurlar.get('USD', 1))
     toplam_usd = (net_try / usd_kur) if usd_kur != 0 else Decimal("0")
 
-    # >>> ÖNEMLİ: template format("{:,.2f}") sayı ister. string verme.
     return render_template(
         'tedarikci_detay.html',
         tedarikci=t,
@@ -155,15 +181,20 @@ def tedarikci_detay(id):
 
 @tedarikci_bp.route('/tedarikci_duzenle/<int:id>', methods=['GET', 'POST'])
 def tedarikci_duzenle(id):
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     tedarikci = Tedarikci.query.get_or_404(id)
     if request.method == 'POST':
-        tedarikci.firma_adi = request.form.get('firma_adi')
-        tedarikci.yetkili_kisi = request.form.get('yetkili_kisi')
-        tedarikci.telefon = request.form.get('telefon')
-        tedarikci.adres = request.form.get('adres')
+        firma_adi = (request.form.get('firma_adi') or '').strip()
+        if not firma_adi:
+            flash('Firma adı boş olamaz.', 'danger')
+            return redirect(url_for('tedarikci.tedarikci_duzenle', id=id))
+
+        tedarikci.firma_adi = firma_adi
+        tedarikci.yetkili_kisi = (request.form.get('yetkili_kisi') or '').strip()
+        tedarikci.telefon = (request.form.get('telefon') or '').strip()
+        tedarikci.adres = (request.form.get('adres') or '').strip()
         db.session.commit()
         return redirect(url_for('tedarikci.ticari_borclar'))
 
@@ -172,7 +203,7 @@ def tedarikci_duzenle(id):
 
 @tedarikci_bp.route('/tedarikci_sil/<int:id>', methods=['POST'])
 def tedarikci_sil(id):
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     t = Tedarikci.query.get_or_404(id)
@@ -187,17 +218,30 @@ def tedarikci_sil(id):
 
 @tedarikci_bp.route('/malzeme_alim_ekle', methods=['POST'])
 def malzeme_alim_ekle():
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
-    t_id = int(request.form.get('tedarikci_id'))
+    t_id = _safe_int(request.form.get('tedarikci_id'), 0)
+    if not t_id:
+        flash('Tedarikçi seçimi hatalı.', 'danger')
+        return redirect(request.referrer or url_for('tedarikci.ticari_borclar'))
+
     pb = normalize_currency(request.form.get('para_birimi') or 'TRY')
+    tutar = money(request.form.get('tutar') or 0)
+    if tutar < 0:
+        flash('Tutar negatif olamaz.', 'danger')
+        return redirect(url_for('tedarikci.tedarikci_detay', id=t_id))
+
+    malzeme_tanimi = (request.form.get('malzeme_tanimi') or '').strip()
+    if not malzeme_tanimi:
+        flash('Malzeme tanımı boş olamaz.', 'danger')
+        return redirect(url_for('tedarikci.tedarikci_detay', id=t_id))
 
     db.session.add(SatinAlma(
-        malzeme_tanimi=request.form.get('malzeme_tanimi'),
-        tutar=money(request.form.get('tutar') or 0),
+        malzeme_tanimi=malzeme_tanimi,
+        tutar=tutar,
         para_birimi=pb,
-        fatura_no=request.form.get('fatura_no'),
+        fatura_no=(request.form.get('fatura_no') or '').strip(),
         tarih=datetime.now(),
         tedarikci_id=t_id
     ))
@@ -207,7 +251,7 @@ def malzeme_alim_ekle():
 
 @tedarikci_bp.route('/alim_sil/<int:id>', methods=['POST'])
 def alim_sil(id):
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     kayit = SatinAlma.query.get_or_404(id)
@@ -224,12 +268,16 @@ def tedarikci_odeme_yap():
     - TedarikciOdeme kaydı eklenir
     - Seçilen kasa/banka hesabının BAKİYESİ (TRY bazında) DÜŞÜRÜLÜR
     """
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     kurlar = _kurlar_try_guvenli()
 
-    t_id = int(request.form.get('tedarikci_id') or 0)
+    t_id = _safe_int(request.form.get('tedarikci_id') or 0, 0)
+    if not t_id:
+        flash('Tedarikçi seçimi hatalı.', 'danger')
+        return redirect(request.referrer or url_for('tedarikci.ticari_borclar'))
+
     birim = normalize_currency(request.form.get('birim') or 'TRY')
 
     kasa_id = _int_or_none(request.form.get('banka_kasa_id'))
@@ -248,7 +296,7 @@ def tedarikci_odeme_yap():
     yeni_odeme = TedarikciOdeme(
         tutar=tutar,
         birim=birim,
-        aciklama=request.form.get('aciklama'),
+        aciklama=(request.form.get('aciklama') or '').strip(),
         kur_degeri=kur,
         banka_kasa_id=kasa_id,
         tedarikci_id=t_id,
@@ -271,14 +319,15 @@ def tedarikci_odeme_sil(id):
     - TedarikciOdeme silinir
     - Seçilen kasa/banka hesabına TRY karşılığı GERİ EKLENİR
     """
-    if 'logged_in' not in session:
+    if not _login_gerekli():
         return redirect(url_for('genel.index'))
 
     kayit = TedarikciOdeme.query.get_or_404(id)
     t_id = kayit.tedarikci_id
 
     kasa_id = kayit.banka_kasa_id
-    tutar_try = money((kayit.tutar or Decimal("0")) * (kayit.kur_degeri or Decimal("1")))
+    kur_d = _safe_decimal_one(getattr(kayit, "kur_degeri", None))
+    tutar_try = money((kayit.tutar or Decimal("0")) * kur_d)
 
     db.session.delete(kayit)
 
