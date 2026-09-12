@@ -1,14 +1,14 @@
 {
   "source": "TCMB",
   "tcmb": {
-    "tarih": "10.09.2026",
-    "bulten_no": "2026/170"
+    "tarih": "11.09.2026",
+    "bulten_no": "2026/171"
   },
-  "generated_at_utc": "2026-09-11T12:05:04Z",
+  "generated_at_utc": "2026-09-12T11:31:22Z",
   "rates": {
     "TRY": 1.0,
-    "USD": 48.5668,
-    "EUR": 56.4974,
-    "GBP": 65.9073
+    "USD": 48.5906,
+    "EUR": 56.361,
+    "GBP": 65.7606
   }
 }
